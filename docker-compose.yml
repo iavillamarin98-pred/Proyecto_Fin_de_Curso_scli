@@ -1,0 +1,50 @@
+services:
+
+  cockroachdb:
+    image: cockroachdb/cockroach:v24.3.5
+    container_name: scli-cockroachdb
+    command: start-single-node --insecure
+    restart: unless-stopped
+
+    ports:
+      - "26257:26257"
+      - "8080:8080"
+
+    volumes:
+      - cockroach_data:/cockroach/cockroach-data
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "cockroach",
+          "sql",
+          "--insecure",
+          "--host=localhost:26257",
+          "--execute=SELECT 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  cockroach-init:
+    image: cockroachdb/cockroach:v24.3.5
+    container_name: scli-cockroach-init
+
+    depends_on:
+      cockroachdb:
+        condition: service_healthy
+
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        cockroach sql \
+          --insecure \
+          --host=cockroachdb:26257 \
+          --execute="CREATE DATABASE IF NOT EXISTS usuarios_db;"
+
+    restart: "no"
+
+volumes:
+  cockroach_data:
