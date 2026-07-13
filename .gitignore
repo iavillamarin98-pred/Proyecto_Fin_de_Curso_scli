@@ -1,0 +1,16 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Maven
+target/
+**/target/
+
+# Logs
+*.log
+
+# Variables de entorno
+.env
