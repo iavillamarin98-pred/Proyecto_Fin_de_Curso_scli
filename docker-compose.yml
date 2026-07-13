@@ -1,0 +1,136 @@
+services:
+
+  # =========================================================
+  # BASE DE DATOS DEL AUTH SERVICE
+  # =========================================================
+  cockroach-auth:
+    image: cockroachdb/cockroach:v26.2.0
+    container_name: scli-cockroach-auth
+
+    command:
+      - start-single-node
+      - --insecure
+      - --store=/cockroach/cockroach-data
+
+    ports:
+      - "26257:26257"
+      - "8088:8080"
+
+    volumes:
+      - cockroach-auth-data:/cockroach/cockroach-data
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "cockroach",
+          "sql",
+          "--insecure",
+          "--host=localhost:26257",
+          "--execute=SELECT 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+    networks:
+      - scli-network
+
+
+  # Crea la base del Auth Service
+  cockroach-auth-init:
+    image: cockroachdb/cockroach:v26.2.0
+    container_name: scli-cockroach-auth-init
+
+    depends_on:
+      cockroach-auth:
+        condition: service_healthy
+
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        cockroach sql \
+          --insecure \
+          --host=cockroach-auth:26257 \
+          --execute="CREATE DATABASE IF NOT EXISTS auth_db;"
+
+    restart: "no"
+
+    networks:
+      - scli-network
+
+
+  # =========================================================
+  # BASE DE DATOS DEL USUARIOS SERVICE
+  # =========================================================
+  cockroach-usuarios:
+    image: cockroachdb/cockroach:v26.2.0
+    container_name: scli-cockroach-usuarios
+
+    command:
+      - start-single-node
+      - --insecure
+      - --store=/cockroach/cockroach-data
+
+
+    ports:
+      - "26258:26257"
+      - "8089:8080"
+
+    volumes:
+      - cockroach-usuarios-data:/cockroach/cockroach-data
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "cockroach",
+          "sql",
+          "--insecure",
+          "--host=localhost:26257",
+          "--execute=SELECT 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+    networks:
+      - scli-network
+
+
+  # Crea la base del Usuarios Service
+  cockroach-usuarios-init:
+    image: cockroachdb/cockroach:v26.2.0
+    container_name: scli-cockroach-usuarios-init
+
+    depends_on:
+      cockroach-usuarios:
+        condition: service_healthy
+
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        cockroach sql \
+          --insecure \
+          --host=cockroach-usuarios:26257 \
+          --execute="CREATE DATABASE IF NOT EXISTS usuarios_db;"
+
+    restart: "no"
+
+    networks:
+      - scli-network
+
+
+volumes:
+
+  cockroach-auth-data:
+
+  cockroach-usuarios-data:
+
+
+networks:
+
+  scli-network:
+    driver: bridge
