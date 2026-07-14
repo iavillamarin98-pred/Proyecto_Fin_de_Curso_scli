@@ -24,11 +24,19 @@ public interface UsuarioAuthRepository
                         "roles",
                         "roles.permisos"
         })
-        Optional<UsuarioAuth> findWithRolesByUsernameIgnoreCase(String username);
+        Optional<UsuarioAuth> findWithRolesByUsernameIgnoreCase(
+                        String username);
 
         @EntityGraph(attributePaths = {
                         "roles",
                         "roles.permisos"
         })
-        Optional<UsuarioAuth> findWithRolesByEmailIgnoreCase(String email);
+        Optional<UsuarioAuth> findWithRolesByEmailIgnoreCase(
+                        String email);
+
+        @EntityGraph(attributePaths = {
+                        "roles",
+                        "roles.permisos"
+        })
+        Optional<UsuarioAuth> findWithRolesById(UUID id);
 }
