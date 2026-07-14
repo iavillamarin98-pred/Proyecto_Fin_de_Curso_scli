@@ -8,6 +8,8 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
 
@@ -29,6 +31,17 @@ public class CustomUserDetailsService implements UserDetailsService {
                         .findWithRolesByEmailIgnoreCase(identificador)
                         .orElseThrow(() -> new UsernameNotFoundException(
                                 "Usuario no encontrado")));
+
+        return new CustomUserDetails(usuario);
+    }
+
+    @Transactional(readOnly = true)
+    public CustomUserDetails loadUserById(UUID usuarioId) {
+
+        UsuarioAuth usuario = usuarioAuthRepository
+                .findWithRolesById(usuarioId)
+                .orElseThrow(() -> new UsernameNotFoundException(
+                        "Usuario no encontrado"));
 
         return new CustomUserDetails(usuario);
     }
