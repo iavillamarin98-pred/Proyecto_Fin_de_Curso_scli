@@ -5,12 +5,20 @@
 # VS Code
 .vscode/
 
-# Maven
+# Maven / Spring Boot
 target/
 **/target/
+
+# Node.js / frontend
+node_modules/
+**/node_modules/
+dist/
+**/dist/
 
 # Logs
 *.log
 
 # Variables de entorno
-.env
+**/.env
+**/.env.*
+!**/.env.example
