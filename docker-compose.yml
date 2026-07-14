@@ -216,7 +216,7 @@ services:
 
 
   # =========================================================
-  # MICROSERVICIO ACADEMICO-LABORATORIOS
+  # ACADEMICO-LABORATORIOS SERVICE
   # =========================================================
   academico-laboratorios-service:
     build:
@@ -225,21 +225,21 @@ services:
 
     container_name: scli-academico-laboratorios-service
 
-    ports:
-      - "8083:8083"
-
-    environment:
-      SERVER_PORT: 8083
-      DB_URL: jdbc:postgresql://cockroach-academico:26257/academico_db?sslmode=disable&options=-c%20allow_unsafe_internals%3Dtrue
-      DB_USERNAME: root
-      DB_PASSWORD: ""
-      INTERNAL_API_KEY: clave-interna-desarrollo
-
     depends_on:
       cockroach-academico:
         condition: service_healthy
       cockroach-academico-init:
         condition: service_completed_successfully
+
+    environment:
+      DB_URL: jdbc:postgresql://cockroach-academico:26257/academico_db?sslmode=disable&options=-c%20allow_unsafe_internals%3Dtrue
+      DB_USERNAME: root
+      DB_PASSWORD: ""
+      SERVER_PORT: 8083
+      INTERNAL_API_KEY: clave-interna-desarrollo
+
+    ports:
+      - "8083:8083"
 
     networks:
       - scli-network

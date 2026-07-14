@@ -2,6 +2,9 @@
 .idea/
 *.iml
 
+# VS Code
+.vscode/
+
 # Maven
 target/
 **/target/
@@ -10,4 +13,4 @@ target/
 *.log
 
 # Variables de entorno
-.envgit add .gitignore
+.env
