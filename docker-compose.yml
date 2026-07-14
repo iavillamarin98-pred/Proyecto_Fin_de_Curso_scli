@@ -65,14 +65,13 @@ services:
   # BASE DE DATOS DEL USUARIOS SERVICE
   # =========================================================
   cockroach-usuarios:
-    image: cockroachdb/cockroach:v26.2.0
+    image: cockroachdb/cockroach:v24.3.5
     container_name: scli-cockroach-usuarios
 
     command:
       - start-single-node
       - --insecure
       - --store=/cockroach/cockroach-data
-
 
     ports:
       - "26258:26257"
@@ -101,7 +100,7 @@ services:
 
   # Crea la base del Usuarios Service
   cockroach-usuarios-init:
-    image: cockroachdb/cockroach:v26.2.0
+    image: cockroachdb/cockroach:v24.3.5
     container_name: scli-cockroach-usuarios-init
 
     depends_on:
@@ -118,6 +117,38 @@ services:
           --execute="CREATE DATABASE IF NOT EXISTS usuarios_db;"
 
     restart: "no"
+
+    networks:
+      - scli-network
+
+
+  # =========================================================
+  # MICROSERVICIO DE USUARIOS
+  # =========================================================
+  usuarios-service:
+    build:
+      context: ./usuarios-service
+      dockerfile: Dockerfile
+
+    container_name: scli-usuarios-service
+
+    ports:
+      - "8082:8082"
+
+    environment:
+      SERVER_PORT: 8082
+      DB_URL: jdbc:postgresql://cockroach-usuarios:26257/usuarios_db?sslmode=disable
+      DB_USERNAME: root
+      DB_PASSWORD: ""
+      INTERNAL_API_KEY: clave-interna-desarrollo
+
+    depends_on:
+      cockroach-usuarios:
+        condition: service_healthy
+      cockroach-usuarios-init:
+        condition: service_completed_successfully
+
+    restart: unless-stopped
 
     networks:
       - scli-network
@@ -185,15 +216,18 @@ services:
 
 
   # =========================================================
-  # ACADEMICO-LABORATORIOS SERVICE (aplicación Spring Boot)
+  # ACADEMICO-LABORATORIOS SERVICE
   # =========================================================
   academico-laboratorios-service:
     build:
       context: ./academico-laboratorios-service
       dockerfile: Dockerfile
+
     container_name: scli-academico-laboratorios-service
 
     depends_on:
+      cockroach-academico:
+        condition: service_healthy
       cockroach-academico-init:
         condition: service_completed_successfully
 
