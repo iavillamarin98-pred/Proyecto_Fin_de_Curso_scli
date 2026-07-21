@@ -1,0 +1,68 @@
+server:
+  port: ${SERVER_PORT:8084}
+
+spring:
+  application:
+    name: reservas-solicitudes-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5436/reservas_solicitudes_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 3000
+      validation-timeout: 2000
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    baseline-on-migrate: false
+
+  jackson:
+    time-zone: UTC
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+  endpoint:
+    health:
+      show-details: always
+
+  health:
+    db:
+      enabled: true
+
+app:
+  internal-api-key: ${INTERNAL_API_KEY:clave-interna-desarrollo}
+
+  services:
+    usuarios:
+      base-url: ${USUARIOS_SERVICE_URL:http://localhost:8082}
+
+    academico-laboratorios:
+      base-url: ${ACADEMICO_LABORATORIOS_SERVICE_URL:http://localhost:8083}
+
+  http:
+    connect-timeout-ms: ${HTTP_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${HTTP_READ_TIMEOUT_MS:3000}
+    max-read-retries: ${HTTP_MAX_READ_RETRIES:2}
+
+  idempotency:
+    header-name: Idempotency-Key
