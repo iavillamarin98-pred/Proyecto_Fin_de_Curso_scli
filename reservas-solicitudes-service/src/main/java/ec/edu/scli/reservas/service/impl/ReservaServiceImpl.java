@@ -151,6 +151,26 @@ public class ReservaServiceImpl implements ReservaService {
         return reservaMapper.toResponse(reservaRepository.save(reserva));
     }
 
+    @Override
+    @Transactional
+    public ReservaResponse marcarNoAsistida(UUID id, UUID usuarioAutenticadoId) {
+        Reserva reserva = obtenerReservaParaActualizar(id);
+        if (reserva.getEstado() != EstadoReserva.PROGRAMADA) {
+            throw new IllegalStateException(
+                    "La reserva solamente puede marcarse como no asistida cuando está programada");
+        }
+
+        LocalDateTime finProgramado =
+                LocalDateTime.of(reserva.getFechaReserva(), reserva.getHoraFin());
+        if (LocalDateTime.now().isBefore(finProgramado)) {
+            throw new IllegalStateException(
+                    "La reserva no puede marcarse como no asistida antes de finalizar su franja");
+        }
+
+        reserva.setEstado(EstadoReserva.NO_ASISTIDA);
+        return reservaMapper.toResponse(reservaRepository.save(reserva));
+    }
+
     private Reserva obtenerReserva(UUID id) {
         return reservaRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException(

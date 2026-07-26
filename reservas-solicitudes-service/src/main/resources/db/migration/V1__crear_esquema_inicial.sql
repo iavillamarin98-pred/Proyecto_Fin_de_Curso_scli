@@ -1,6 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS btree_gist;
-
 CREATE TABLE solicitudes_reserva (
     id UUID DEFAULT gen_random_uuid(),
     solicitante_id UUID NOT NULL,
@@ -59,9 +56,6 @@ CREATE TABLE reservas (
     hora_fin TIME NOT NULL,
     estado VARCHAR(30) NOT NULL DEFAULT 'PROGRAMADA',
     codigo_reserva VARCHAR(50) NOT NULL,
-    rango_reserva TSRANGE GENERATED ALWAYS AS (
-        tsrange(fecha_reserva + hora_inicio, fecha_reserva + hora_fin, '[)')
-    ) STORED,
     creada_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     actualizada_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     version BIGINT NOT NULL DEFAULT 0,
@@ -73,14 +67,7 @@ CREATE TABLE reservas (
     CONSTRAINT ck_reservas_horas
         CHECK (hora_fin > hora_inicio),
     CONSTRAINT ck_reservas_estado
-        CHECK (estado IN ('PROGRAMADA', 'EN_CURSO', 'FINALIZADA', 'CANCELADA', 'NO_ASISTIDA')),
-    -- Protección final de base de datos contra reservas concurrentes superpuestas.
-    CONSTRAINT ex_reservas_laboratorio_rango_activo
-        EXCLUDE USING GIST (
-            laboratorio_id WITH =,
-            rango_reserva WITH &&
-        )
-        WHERE (estado IN ('PROGRAMADA', 'EN_CURSO'))
+        CHECK (estado IN ('PROGRAMADA', 'EN_CURSO', 'FINALIZADA', 'CANCELADA', 'NO_ASISTIDA'))
 );
 
 -- solicitud_id es una relación interna y utiliza clave foránea local.
@@ -88,9 +75,6 @@ COMMENT ON COLUMN reservas.solicitud_id IS 'Relación interna con solicitudes_re
 -- laboratorio_id, responsable_id son referencias UUID externas sin claves foráneas.
 COMMENT ON COLUMN reservas.laboratorio_id IS 'Referencia UUID externa sin clave foránea.';
 COMMENT ON COLUMN reservas.responsable_id IS 'Referencia UUID externa sin clave foránea.';
-COMMENT ON CONSTRAINT ex_reservas_laboratorio_rango_activo ON reservas IS
-    'Protección final de base de datos contra concurrencia en reservas activas.';
-
 CREATE INDEX ix_reservas_laboratorio_fecha
     ON reservas (laboratorio_id, fecha_reserva);
 CREATE INDEX ix_reservas_responsable_id
@@ -139,22 +123,13 @@ CREATE TABLE bloqueos_agenda (
     motivo VARCHAR(500) NOT NULL,
     creado_por UUID NOT NULL,
     activo BOOLEAN NOT NULL DEFAULT TRUE,
-    rango_bloqueo TSRANGE GENERATED ALWAYS AS (
-        tsrange(fecha + hora_inicio, fecha + hora_fin, '[)')
-    ) STORED,
     creado_en TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     version BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT pk_bloqueos_agenda PRIMARY KEY (id),
     CONSTRAINT ck_bloqueos_agenda_horas
         CHECK (hora_fin > hora_inicio),
     CONSTRAINT ck_bloqueos_agenda_motivo_no_vacio
-        CHECK (btrim(motivo) <> ''),
-    CONSTRAINT ex_bloqueos_agenda_laboratorio_rango_activo
-        EXCLUDE USING GIST (
-            laboratorio_id WITH =,
-            rango_bloqueo WITH &&
-        )
-        WHERE (activo)
+        CHECK (btrim(motivo) <> '')
 );
 
 -- laboratorio_id y creado_por son referencias UUID externas sin claves foráneas.
