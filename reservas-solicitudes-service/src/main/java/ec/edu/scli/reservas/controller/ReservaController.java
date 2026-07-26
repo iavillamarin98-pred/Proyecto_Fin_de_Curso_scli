@@ -97,6 +97,13 @@ public class ReservaController {
         return ResponseEntity.ok(reservaService.finalizar(id, obtenerUsuarioId(principal)));
     }
 
+    @PostMapping("/{id}/no-asistida")
+    public ResponseEntity<ReservaResponse> marcarNoAsistida(
+            @PathVariable UUID id, Principal principal) {
+        return ResponseEntity.ok(
+                reservaService.marcarNoAsistida(id, obtenerUsuarioId(principal)));
+    }
+
     private UUID obtenerUsuarioId(Principal principal) {
         if (principal == null) {
             throw new IllegalStateException("No existe un usuario autenticado");

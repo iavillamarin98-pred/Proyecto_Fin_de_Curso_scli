@@ -286,8 +286,29 @@ public class SolicitudReservaServiceImpl implements SolicitudReservaService {
     }
 
     @Override
+    @Transactional
     public SolicitudReservaResponse ponerEnRevision(UUID id, UUID usuarioAutenticadoId) {
-        throw new UnsupportedOperationException("Pendiente de implementar.");
+        SolicitudReserva solicitud = solicitudReservaRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No existe la solicitud de reserva indicada"));
+
+        if (solicitud.getEstado() != EstadoSolicitud.PENDIENTE) {
+            throw new IllegalStateException(
+                    "La solicitud solamente puede ponerse en revisión cuando está pendiente");
+        }
+
+        solicitud.setEstado(EstadoSolicitud.EN_REVISION);
+        SolicitudReserva guardada = solicitudReservaRepository.save(solicitud);
+
+        HistorialSolicitud historial = BeanUtils.instantiateClass(HistorialSolicitud.class);
+        historial.setSolicitud(guardada);
+        historial.setEstadoAnterior(EstadoSolicitud.PENDIENTE);
+        historial.setEstadoNuevo(EstadoSolicitud.EN_REVISION);
+        historial.setUsuarioAccionId(usuarioAutenticadoId);
+        historial.setComentario("Solicitud puesta en revisión");
+        historialSolicitudRepository.save(historial);
+
+        return solicitudReservaMapper.toResponse(guardada);
     }
 
     @Override
@@ -306,9 +327,9 @@ public class SolicitudReservaServiceImpl implements SolicitudReservaService {
                     "La solicitud solamente puede aprobarse cuando está en revisión");
         }
 
-        Reserva existente = reservaRepository.findBySolicitudId(id).orElse(null);
-        if (existente != null) {
-            return reservaMapper.toResponse(existente);
+        if (reservaRepository.existsBySolicitudId(id)) {
+            throw new IllegalStateException(
+                    "La solicitud ya tiene una reserva asociada");
         }
 
         validarDisponibilidad(
@@ -321,7 +342,7 @@ public class SolicitudReservaServiceImpl implements SolicitudReservaService {
         Reserva reserva = BeanUtils.instantiateClass(Reserva.class);
         reserva.setSolicitud(solicitud);
         reserva.setLaboratorioId(solicitud.getLaboratorioId());
-        reserva.setResponsableId(request.responsableId());
+        reserva.setResponsableId(usuarioAutenticadoId);
         reserva.setFechaReserva(solicitud.getFechaReserva());
         reserva.setHoraInicio(solicitud.getHoraInicio());
         reserva.setHoraFin(solicitud.getHoraFin());
@@ -383,32 +404,31 @@ public class SolicitudReservaServiceImpl implements SolicitudReservaService {
         SolicitudReserva solicitud = solicitudReservaRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "No existe la solicitud de reserva indicada"));
-        EstadoSolicitud estadoAnterior = solicitud.getEstado();
-        if (estadoAnterior != EstadoSolicitud.PENDIENTE
-                && estadoAnterior != EstadoSolicitud.EN_REVISION
-                && estadoAnterior != EstadoSolicitud.APROBADA) {
+        if (solicitud.getEstado() != EstadoSolicitud.APROBADA) {
             throw new IllegalStateException(
-                    "La solicitud no puede cancelarse en su estado actual");
+                    "La solicitud solamente puede cancelarse cuando está aprobada");
         }
 
-        if (estadoAnterior == EstadoSolicitud.APROBADA) {
-            Reserva reserva = reservaRepository.findBySolicitudId(id)
-                    .orElseThrow(() -> new IllegalStateException(
-                            "La solicitud aprobada no tiene una reserva asociada"));
-            if (reserva.getEstado() != EstadoReserva.PROGRAMADA) {
-                throw new IllegalStateException(
-                        "La reserva solamente puede cancelarse cuando está programada");
-            }
-            reserva.setEstado(EstadoReserva.CANCELADA);
-            reservaRepository.save(reserva);
+        Reserva reservaAsociada = reservaRepository.findBySolicitudId(id)
+                .orElseThrow(() -> new IllegalStateException(
+                        "La solicitud aprobada no tiene una reserva asociada"));
+        Reserva reserva = reservaRepository.findByIdForUpdate(reservaAsociada.getId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "La solicitud aprobada no tiene una reserva asociada"));
+        if (reserva.getEstado() != EstadoReserva.PROGRAMADA) {
+            throw new IllegalStateException(
+                    "La reserva solamente puede cancelarse cuando está programada");
         }
+
+        reserva.setEstado(EstadoReserva.CANCELADA);
+        reservaRepository.save(reserva);
 
         solicitud.setEstado(EstadoSolicitud.CANCELADA);
         SolicitudReserva guardada = solicitudReservaRepository.save(solicitud);
 
         HistorialSolicitud historial = BeanUtils.instantiateClass(HistorialSolicitud.class);
         historial.setSolicitud(guardada);
-        historial.setEstadoAnterior(estadoAnterior);
+        historial.setEstadoAnterior(EstadoSolicitud.APROBADA);
         historial.setEstadoNuevo(EstadoSolicitud.CANCELADA);
         historial.setComentario(request.comentario());
         historial.setUsuarioAccionId(usuarioAutenticadoId);

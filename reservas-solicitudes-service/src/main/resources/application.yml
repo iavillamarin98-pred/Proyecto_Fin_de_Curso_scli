@@ -6,9 +6,9 @@ spring:
     name: reservas-solicitudes-service
 
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5436/reservas_solicitudes_db}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: ${DB_URL:jdbc:postgresql://localhost:26260/reservas_db?sslmode=disable&options=-c%20allow_unsafe_internals%3Dtrue}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
     hikari:
       connection-timeout: 3000
@@ -48,6 +48,14 @@ management:
   health:
     db:
       enabled: true
+
+security:
+  jwt:
+    issuer: ${JWT_ISSUER:scli-auth-service}
+    secret: ${JWT_SECRET}
+
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
 
 app:
   internal-api-key: ${INTERNAL_API_KEY:clave-interna-desarrollo}
