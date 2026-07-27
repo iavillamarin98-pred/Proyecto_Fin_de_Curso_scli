@@ -1,5 +1,6 @@
 package ec.edu.scli.usuarios.service;
 
+import ec.edu.scli.usuarios.dto.perfil.PerfilAuthResponse;
 import ec.edu.scli.usuarios.dto.perfil.PerfilCreateRequest;
 import ec.edu.scli.usuarios.dto.perfil.PerfilExistsResponse;
 import ec.edu.scli.usuarios.dto.perfil.PerfilResponse;
@@ -13,15 +14,14 @@ public interface PerfilService {
 
     PerfilResponse crear(PerfilCreateRequest request);
 
-    //Page<PerfilResponse> listar(Pageable pageable);
     Page<PerfilResponse> listar(
             String identificacion,
             String nombre,
             String email,
             TipoPerfil tipoPerfil,
             Boolean activo,
-            Pageable pageable
-    );
+            Pageable pageable);
+
     PerfilResponse obtenerPorId(UUID id);
 
     PerfilResponse actualizar(UUID id, PerfilUpdateRequest request);
@@ -31,4 +31,6 @@ public interface PerfilService {
     void eliminar(UUID id);
 
     PerfilExistsResponse verificarExistencia(UUID perfilId);
+
+    PerfilAuthResponse obtenerParaAuth(UUID perfilId);
 }

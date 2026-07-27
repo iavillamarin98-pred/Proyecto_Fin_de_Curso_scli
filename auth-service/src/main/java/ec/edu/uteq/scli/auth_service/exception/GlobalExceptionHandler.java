@@ -15,67 +15,78 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(InvalidCredentialsException.class)
-    public ResponseEntity<ErrorResponse> handleInvalidCredentials(
-            InvalidCredentialsException exception,
-            HttpServletRequest request) {
-        return buildResponse(
-                HttpStatus.UNAUTHORIZED,
-                exception.getMessage(),
-                request.getRequestURI());
-    }
+        @ExceptionHandler(InvalidCredentialsException.class)
+        public ResponseEntity<ErrorResponse> handleInvalidCredentials(
+                        InvalidCredentialsException exception,
+                        HttpServletRequest request) {
+                return buildResponse(
+                                HttpStatus.UNAUTHORIZED,
+                                exception.getMessage(),
+                                request.getRequestURI());
+        }
 
-    @ExceptionHandler(AccountBlockedException.class)
-    public ResponseEntity<ErrorResponse> handleAccountBlocked(
-            AccountBlockedException exception,
-            HttpServletRequest request) {
-        return buildResponse(
-                HttpStatus.LOCKED,
-                exception.getMessage(),
-                request.getRequestURI());
-    }
+        @ExceptionHandler(AccountBlockedException.class)
+        public ResponseEntity<ErrorResponse> handleAccountBlocked(
+                        AccountBlockedException exception,
+                        HttpServletRequest request) {
+                return buildResponse(
+                                HttpStatus.LOCKED,
+                                exception.getMessage(),
+                                request.getRequestURI());
+        }
 
-    @ExceptionHandler(AccountDisabledException.class)
-    public ResponseEntity<ErrorResponse> handleAccountDisabled(
-            AccountDisabledException exception,
-            HttpServletRequest request) {
-        return buildResponse(
-                HttpStatus.FORBIDDEN,
-                exception.getMessage(),
-                request.getRequestURI());
-    }
+        @ExceptionHandler(AccountDisabledException.class)
+        public ResponseEntity<ErrorResponse> handleAccountDisabled(
+                        AccountDisabledException exception,
+                        HttpServletRequest request) {
+                return buildResponse(
+                                HttpStatus.FORBIDDEN,
+                                exception.getMessage(),
+                                request.getRequestURI());
+        }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(
-            MethodArgumentNotValidException exception,
-            HttpServletRequest request) {
-        String message = exception
-                .getBindingResult()
-                .getFieldErrors()
-                .stream()
-                .map(error -> error.getField() + ": " +
-                        error.getDefaultMessage())
-                .collect(Collectors.joining("; "));
+        @ExceptionHandler(UsuarioServiceUnavailableException.class)
+        public ResponseEntity<ErrorResponse> handleUsuarioServiceUnavailable(
+                        UsuarioServiceUnavailableException exception,
+                        HttpServletRequest request) {
+                return buildResponse(
+                                HttpStatus.SERVICE_UNAVAILABLE,
+                                "El servicio de usuarios no está disponible. Intenta nuevamente en unos momentos.",
+                                request.getRequestURI());
+        }
 
-        return buildResponse(
-                HttpStatus.BAD_REQUEST,
-                message,
-                request.getRequestURI());
-    }
+        @ExceptionHandler(MethodArgumentNotValidException.class)
+        public ResponseEntity<ErrorResponse> handleValidation(
+                        MethodArgumentNotValidException exception,
+                        HttpServletRequest request) {
+                String message = exception
+                                .getBindingResult()
+                                .getFieldErrors()
+                                .stream()
+                                .map(error -> error.getField() + ": " +
+                                                error.getDefaultMessage())
+                                .collect(Collectors.joining("; "));
 
-    private ResponseEntity<ErrorResponse> buildResponse(
-            HttpStatus status,
-            String message,
-            String path) {
-        ErrorResponse body = new ErrorResponse(
-                OffsetDateTime.now(ZoneOffset.UTC),
-                status.value(),
-                status.getReasonPhrase(),
-                message,
-                path);
+                return buildResponse(
+                                HttpStatus.BAD_REQUEST,
+                                message,
+                                request.getRequestURI());
+        }
 
-        return ResponseEntity
-                .status(status)
-                .body(body);
-    }
+        private ResponseEntity<ErrorResponse> buildResponse(
+                        HttpStatus status,
+                        String message,
+                        String path) {
+                ErrorResponse body = new ErrorResponse(
+                                OffsetDateTime.now(ZoneOffset.UTC),
+                                status.value(),
+                                status.getReasonPhrase(),
+                                message,
+                                path);
+
+                return ResponseEntity
+                                .status(status)
+                                .body(body);
+        }
+
 }

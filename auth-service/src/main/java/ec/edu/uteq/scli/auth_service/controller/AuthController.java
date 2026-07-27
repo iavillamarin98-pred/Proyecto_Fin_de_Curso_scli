@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import ec.edu.uteq.scli.auth_service.dto.RefreshTokenRequest;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -26,4 +27,14 @@ public class AuthController {
         return ResponseEntity.ok(
                 authService.login(request));
     }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<LoginResponse> refresh(
+
+            @Valid @RequestBody RefreshTokenRequest request) {
+
+        return ResponseEntity.ok(
+                authService.refrescar(request.refreshToken()));
+    }
+
 }
