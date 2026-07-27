@@ -13,10 +13,10 @@ INSERT INTO usuarios_auth (
 )
 VALUES (
     gen_random_uuid(),
-    gen_random_uuid(),
+    'a0000000-0000-0000-0000-000000000001',
     'admin',
     'admin@scli.local',
-    '$2a$12$pD9EUX0uJJhF1.uTQyF07OVmyAIwIDA2neWwTRJe5CRs3fTPAuZLi',
+    '$2a$12$QcoSYCA.s6aoFBSihomvPeF1tM2B2ZuwjSH8ixyS6pBZqgZfuuZpK',
     TRUE,
     FALSE,
     0,
