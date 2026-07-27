@@ -35,6 +35,16 @@ spring:
   jackson:
     time-zone: UTC
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    ec.edu.scli.reservas: ${LOG_LEVEL_APP:INFO}
+    org.springframework.web.client: ${LOG_LEVEL_REST_CLIENT:WARN}
+
 management:
   endpoints:
     web:
