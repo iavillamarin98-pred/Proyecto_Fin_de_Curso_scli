@@ -281,6 +281,107 @@ services:
       - scli-network
 
 
+  # =========================================================
+  # INICIO - RESERVAS-SOLICITUDES SERVICE (Freddy Farinango)
+  # =========================================================
+
+  # =========================================================
+  # BASE DE DATOS DEL RESERVAS-SOLICITUDES SERVICE
+  # =========================================================
+  cockroach-reservas:
+    image: cockroachdb/cockroach:v26.2.0
+    container_name: scli-cockroach-reservas
+
+    command:
+      - start-single-node
+      - --insecure
+      - --store=/cockroach/cockroach-data
+
+    ports:
+      - "26260:26257"
+      - "8091:8080"
+
+    volumes:
+      - cockroach-reservas-data:/cockroach/cockroach-data
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "cockroach",
+          "sql",
+          "--insecure",
+          "--host=localhost:26257",
+          "--execute=SELECT 1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+    networks:
+      - scli-network
+
+
+  # Crea la base del Reservas-Solicitudes Service
+  cockroach-reservas-init:
+    image: cockroachdb/cockroach:v26.2.0
+    container_name: scli-cockroach-reservas-init
+
+    depends_on:
+      cockroach-reservas:
+        condition: service_healthy
+
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        cockroach sql \
+          --insecure \
+          --host=cockroach-reservas:26257 \
+          --execute="CREATE DATABASE IF NOT EXISTS reservas_db;"
+
+    restart: "no"
+
+    networks:
+      - scli-network
+
+
+  # =========================================================
+  # RESERVAS-SOLICITUDES SERVICE
+  # =========================================================
+  reservas-solicitudes-service:
+    build:
+      context: ./reservas-solicitudes-service
+      dockerfile: Dockerfile
+
+    container_name: scli-reservas-solicitudes-service
+
+    ports:
+      - "8084:8084"
+
+    environment:
+      SERVER_PORT: 8084
+      DB_URL: jdbc:postgresql://cockroach-reservas:26257/reservas_db?sslmode=disable
+      DB_USERNAME: root
+      DB_PASSWORD: ""
+      INTERNAL_API_KEY: clave-interna-desarrollo
+
+    depends_on:
+      cockroach-reservas:
+        condition: service_healthy
+      cockroach-reservas-init:
+        condition: service_completed_successfully
+
+    restart: unless-stopped
+
+    networks:
+      - scli-network
+
+  # =========================================================
+  # FIN - RESERVAS-SOLICITUDES SERVICE (Freddy Farinango)
+  # =========================================================
+
+
 volumes:
 
   cockroach-auth-data:
@@ -288,6 +389,8 @@ volumes:
   cockroach-usuarios-data:
 
   cockroach-academico-data:
+
+  cockroach-reservas-data:
 
 
 networks:

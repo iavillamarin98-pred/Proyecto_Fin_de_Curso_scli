@@ -28,4 +28,6 @@ public interface ReservaService {
     ReservaResponse iniciar(UUID id, UUID usuarioAutenticadoId);
 
     ReservaResponse finalizar(UUID id, UUID usuarioAutenticadoId);
+
+    ReservaResponse marcarNoAsistida(UUID id, UUID usuarioAutenticadoId);
 }

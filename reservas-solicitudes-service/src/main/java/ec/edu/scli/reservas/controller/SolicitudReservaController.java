@@ -50,8 +50,11 @@ public class SolicitudReservaController {
             @Valid @RequestBody CrearSolicitudReservaRequest request,
             @RequestHeader("Idempotency-Key") @NotBlank String claveIdempotencia,
             Principal principal) {
+        UUID perfilAutenticadoId = obtenerUsuarioId(principal);
+        CrearSolicitudReservaRequest requestAutenticado =
+                asociarSolicitanteAutenticado(request, perfilAutenticadoId);
         SolicitudReservaResponse respuesta = solicitudReservaService.crear(
-                request, claveIdempotencia, obtenerUsuarioId(principal));
+                requestAutenticado, claveIdempotencia, perfilAutenticadoId);
         return ResponseEntity.created(URI.create("/api/v1/solicitudes/" + respuesta.id())).body(respuesta);
     }
 
@@ -141,5 +144,21 @@ public class SolicitudReservaController {
         } catch (IllegalArgumentException | NullPointerException exception) {
             throw new IllegalStateException("La identidad autenticada no contiene un UUID válido");
         }
+    }
+
+    private CrearSolicitudReservaRequest asociarSolicitanteAutenticado(
+            CrearSolicitudReservaRequest request, UUID perfilAutenticadoId) {
+        return new CrearSolicitudReservaRequest(
+                perfilAutenticadoId,
+                request.docenteId(),
+                request.laboratorioId(),
+                request.materiaId(),
+                request.periodoLectivoId(),
+                request.fechaReserva(),
+                request.horaInicio(),
+                request.horaFin(),
+                request.numeroParticipantes(),
+                request.motivo(),
+                request.observacion());
     }
 }
