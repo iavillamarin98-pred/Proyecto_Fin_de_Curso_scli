@@ -10,6 +10,7 @@ Dependencia de instrumentación: ``psutil``.
 from __future__ import annotations
 
 import argparse
+import csv
 import importlib.metadata
 import json
 import os
@@ -33,6 +34,35 @@ SPARK_DIR = PROJECT_ROOT / "spark"
 DEFAULT_CONFIG = Path(__file__).with_name("experiment-config.json")
 SAMPLE_INTERVAL_SECONDS = 0.2
 MIB = 1024 * 1024
+
+COMPARISON_COLUMNS = (
+    "run_id",
+    "protocol_version",
+    "treatment",
+    "dataset_id",
+    "dataset_snapshot_id",
+    "iteration",
+    "started_at",
+    "finished_at",
+    "duration_ms",
+    "cpu_percent_mean",
+    "cpu_percent_max",
+    "memory_mib_mean",
+    "memory_mib_max",
+    "rows_processed",
+    "throughput_rows_per_second",
+    "status",
+    "error",
+    "host",
+    "operating_system",
+    "cpu_model",
+    "logical_cpu_count",
+    "system_memory_mib",
+    "python_version",
+    "pandas_version",
+    "spark_version",
+    "java_version",
+)
 
 
 def utc_now() -> str:
@@ -303,6 +333,56 @@ def persist_record(record: dict[str, Any], output_directory: Path) -> Path:
     return destination
 
 
+def flatten_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Aplana el entorno anidado para representar una ejecución en CSV."""
+
+    environment = record["environment"]
+    return {
+        **{column: record.get(column) for column in COMPARISON_COLUMNS[:17]},
+        "host": environment["host"],
+        "operating_system": environment["operating_system"],
+        "cpu_model": environment["cpu_model"],
+        "logical_cpu_count": environment["logical_cpu_count"],
+        "system_memory_mib": environment["memory_mib"],
+        "python_version": environment["python_version"],
+        "pandas_version": environment.get("pandas_version"),
+        "spark_version": environment.get("spark_version"),
+        "java_version": environment.get("java_version"),
+    }
+
+
+def generate_comparative_outputs(
+    records: list[dict[str, Any]],
+    output_directory: Path,
+) -> tuple[Path, Path]:
+    """Consolida el lote medido en las plantillas comparativas JSON y CSV."""
+
+    output_directory.mkdir(parents=True, exist_ok=True)
+    json_destination = output_directory / "comparacion.json"
+    csv_destination = output_directory / "comparacion.csv"
+
+    json_payload = {
+        "protocol_version": records[0]["protocol_version"] if records else None,
+        "generated_at": utc_now() if records else None,
+        "results": records,
+    }
+    json_temporary = json_destination.with_suffix(".json.tmp")
+    json_temporary.write_text(
+        json.dumps(json_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    json_temporary.replace(json_destination)
+
+    csv_temporary = csv_destination.with_suffix(".csv.tmp")
+    with csv_temporary.open("w", encoding="utf-8", newline="") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=COMPARISON_COLUMNS)
+        writer.writeheader()
+        writer.writerows(flatten_record(record) for record in records)
+    csv_temporary.replace(csv_destination)
+
+    return json_destination, csv_destination
+
+
 def ordered_treatments(config: dict[str, Any], iteration: int) -> list[str]:
     """Alterna el orden para reducir sesgo entre tratamientos."""
 
@@ -319,6 +399,7 @@ def run_comparison(config_path: Path) -> None:
     warmups = int(config["execution"]["warmup_iterations"])
     repetitions = int(config["execution"]["measured_iterations"])
     output_directory = PROJECT_ROOT / config["output"]["directory"]
+    measured_records: list[dict[str, Any]] = []
 
     for warmup in range(1, warmups + 1):
         for treatment in ordered_treatments(config, warmup):
@@ -328,6 +409,9 @@ def run_comparison(config_path: Path) -> None:
         for treatment in ordered_treatments(config, iteration):
             record = execute_treatment(treatment, iteration, config)
             persist_record(record, output_directory)
+            measured_records.append(record)
+
+    generate_comparative_outputs(measured_records, output_directory)
 
 
 def parse_args() -> argparse.Namespace:
