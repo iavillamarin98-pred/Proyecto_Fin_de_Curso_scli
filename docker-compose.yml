@@ -286,67 +286,6 @@ services:
   # =========================================================
 
   # =========================================================
-  # BASE DE DATOS DEL RESERVAS-SOLICITUDES SERVICE
-  # =========================================================
-  cockroach-reservas:
-    image: cockroachdb/cockroach:v26.2.0
-    container_name: scli-cockroach-reservas
-
-    command:
-      - start-single-node
-      - --insecure
-      - --store=/cockroach/cockroach-data
-
-    ports:
-      - "26260:26257"
-      - "8091:8080"
-
-    volumes:
-      - cockroach-reservas-data:/cockroach/cockroach-data
-
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "cockroach",
-          "sql",
-          "--insecure",
-          "--host=localhost:26257",
-          "--execute=SELECT 1"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-    networks:
-      - scli-network
-
-
-  # Crea la base del Reservas-Solicitudes Service
-  cockroach-reservas-init:
-    image: cockroachdb/cockroach:v26.2.0
-    container_name: scli-cockroach-reservas-init
-
-    depends_on:
-      cockroach-reservas:
-        condition: service_healthy
-
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        cockroach sql \
-          --insecure \
-          --host=cockroach-reservas:26257 \
-          --execute="CREATE DATABASE IF NOT EXISTS reservas_db;"
-
-    restart: "no"
-
-    networks:
-      - scli-network
-
-
-  # =========================================================
   # RESERVAS-SOLICITUDES SERVICE
   # =========================================================
   reservas-solicitudes-service:
@@ -361,17 +300,17 @@ services:
 
     environment:
       SERVER_PORT: 8084
-      DB_URL: jdbc:postgresql://cockroach-reservas:26257/reservas_db?sslmode=disable&options=-c%20allow_unsafe_internals%3Dtrue
+      DB_URL: jdbc:postgresql://crdb-e3-1:26257,crdb-e3-2:26257,crdb-e3-3:26257/reservas_db?sslmode=disable&options=-c%20allow_unsafe_internals%3Dtrue
       DB_USERNAME: root
       DB_PASSWORD: ""
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+      SPRING_FLYWAY_BASELINE_VERSION: "1"
       INTERNAL_API_KEY: clave-interna-desarrollo
       JWT_SECRET: ${JWT_SECRET}
       USUARIOS_SERVICE_URL: http://usuarios-service:8082
 
     depends_on:
-      cockroach-reservas:
-        condition: service_healthy
-      cockroach-reservas-init:
+      crdb-e3-init:
         condition: service_completed_successfully
 
     restart: unless-stopped
@@ -443,23 +382,60 @@ services:
     networks:
       - scli-network
 
-  # PENDIENTE - Paso 2 (Freddy):
-  # Habilitar crdb-e3-init cuando exista db/schema.sql. El servicio deberá
-  # inicializar el clúster y aplicar ese archivo sin duplicar su contenido aquí.
-  #
-  # crdb-e3-init:
-  #   image: ${CRDB_E3_IMAGE:-cockroachdb/cockroach:v26.2.0}
-  #   container_name: scli-crdb-e3-init
-  #   depends_on:
-  #     - crdb-e3-1
-  #     - crdb-e3-2
-  #     - crdb-e3-3
-  #   volumes:
-  #     - ./db/schema.sql:/schema.sql:ro
-  #   restart: "no"
-  #   networks:
-  #     - scli-network
-  # TODO(Paso 2 - Freddy): definir el entrypoint de inicialización y carga.
+  crdb-e3-init:
+    image: ${CRDB_E3_IMAGE:-cockroachdb/cockroach:v26.2.0}
+    container_name: scli-crdb-e3-init
+    depends_on:
+      crdb-e3-1:
+        condition: service_started
+      crdb-e3-2:
+        condition: service_started
+      crdb-e3-3:
+        condition: service_started
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        until cockroach init \
+          --insecure \
+          --host=crdb-e3-1:26257
+        do
+          if cockroach sql \
+            --insecure \
+            --host=crdb-e3-1:26257 \
+            --execute="SELECT 1"
+          then
+            break
+          fi
+          sleep 2
+        done
+
+        until cockroach sql \
+          --insecure \
+          --host=crdb-e3-1:26257 \
+          --execute="SELECT 1"
+        do
+          sleep 2
+        done
+
+        if cockroach sql \
+          --insecure \
+          --host=crdb-e3-1:26257 \
+          --database=reservas_db \
+          --execute="SELECT 1 FROM configuraciones_reserva LIMIT 0"
+        then
+          echo "El esquema de reservas ya está aplicado."
+        else
+          cockroach sql \
+            --insecure \
+            --host=crdb-e3-1:26257 \
+            --file=/schema.sql
+        fi
+    volumes:
+      - ./db/schema.sql:/schema.sql:ro
+    restart: "no"
+    networks:
+      - scli-network
 
 
 volumes:
@@ -469,8 +445,6 @@ volumes:
   cockroach-usuarios-data:
 
   cockroach-academico-data:
-
-  cockroach-reservas-data:
 
   crdb-e3-1-data:
 
