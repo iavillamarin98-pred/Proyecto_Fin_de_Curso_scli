@@ -383,6 +383,84 @@ services:
   # FIN - RESERVAS-SOLICITUDES SERVICE (Freddy Farinango)
   # =========================================================
 
+  # =========================================================
+  # COCKROACHDB CLUSTER E3 (Paso 1 - Isaías Urbina)
+  # =========================================================
+  crdb-e3-1:
+    image: ${CRDB_E3_IMAGE:-cockroachdb/cockroach:v26.2.0}
+    container_name: scli-crdb-e3-1
+    command:
+      - start
+      - --insecure
+      - --advertise-addr=crdb-e3-1
+      - --join=crdb-e3-1,crdb-e3-2,crdb-e3-3
+      - --http-addr=0.0.0.0:8080
+      - --store=/cockroach/cockroach-data
+    ports:
+      - "${CRDB_E3_1_SQL_PORT:-26261}:26257"
+      - "${CRDB_E3_1_HTTP_PORT:-8092}:8080"
+    volumes:
+      - crdb-e3-1-data:/cockroach/cockroach-data
+    restart: unless-stopped
+    networks:
+      - scli-network
+
+  crdb-e3-2:
+    image: ${CRDB_E3_IMAGE:-cockroachdb/cockroach:v26.2.0}
+    container_name: scli-crdb-e3-2
+    command:
+      - start
+      - --insecure
+      - --advertise-addr=crdb-e3-2
+      - --join=crdb-e3-1,crdb-e3-2,crdb-e3-3
+      - --http-addr=0.0.0.0:8080
+      - --store=/cockroach/cockroach-data
+    ports:
+      - "${CRDB_E3_2_SQL_PORT:-26262}:26257"
+      - "${CRDB_E3_2_HTTP_PORT:-8093}:8080"
+    volumes:
+      - crdb-e3-2-data:/cockroach/cockroach-data
+    restart: unless-stopped
+    networks:
+      - scli-network
+
+  crdb-e3-3:
+    image: ${CRDB_E3_IMAGE:-cockroachdb/cockroach:v26.2.0}
+    container_name: scli-crdb-e3-3
+    command:
+      - start
+      - --insecure
+      - --advertise-addr=crdb-e3-3
+      - --join=crdb-e3-1,crdb-e3-2,crdb-e3-3
+      - --http-addr=0.0.0.0:8080
+      - --store=/cockroach/cockroach-data
+    ports:
+      - "${CRDB_E3_3_SQL_PORT:-26263}:26257"
+      - "${CRDB_E3_3_HTTP_PORT:-8094}:8080"
+    volumes:
+      - crdb-e3-3-data:/cockroach/cockroach-data
+    restart: unless-stopped
+    networks:
+      - scli-network
+
+  # PENDIENTE - Paso 2 (Freddy):
+  # Habilitar crdb-e3-init cuando exista db/schema.sql. El servicio deberá
+  # inicializar el clúster y aplicar ese archivo sin duplicar su contenido aquí.
+  #
+  # crdb-e3-init:
+  #   image: ${CRDB_E3_IMAGE:-cockroachdb/cockroach:v26.2.0}
+  #   container_name: scli-crdb-e3-init
+  #   depends_on:
+  #     - crdb-e3-1
+  #     - crdb-e3-2
+  #     - crdb-e3-3
+  #   volumes:
+  #     - ./db/schema.sql:/schema.sql:ro
+  #   restart: "no"
+  #   networks:
+  #     - scli-network
+  # TODO(Paso 2 - Freddy): definir el entrypoint de inicialización y carga.
+
 
 volumes:
 
@@ -393,6 +471,12 @@ volumes:
   cockroach-academico-data:
 
   cockroach-reservas-data:
+
+  crdb-e3-1-data:
+
+  crdb-e3-2-data:
+
+  crdb-e3-3-data:
 
 
 networks:
