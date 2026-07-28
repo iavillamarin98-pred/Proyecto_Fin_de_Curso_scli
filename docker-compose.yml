@@ -361,10 +361,12 @@ services:
 
     environment:
       SERVER_PORT: 8084
-      DB_URL: jdbc:postgresql://cockroach-reservas:26257/reservas_db?sslmode=disable
+      DB_URL: jdbc:postgresql://cockroach-reservas:26257/reservas_db?sslmode=disable&options=-c%20allow_unsafe_internals%3Dtrue
       DB_USERNAME: root
       DB_PASSWORD: ""
       INTERNAL_API_KEY: clave-interna-desarrollo
+      JWT_SECRET: ${JWT_SECRET}
+      USUARIOS_SERVICE_URL: http://usuarios-service:8082
 
     depends_on:
       cockroach-reservas:
