@@ -13,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -105,7 +106,7 @@ public class ReservaServiceImpl implements ReservaService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public ReservaResponse cancelar(
             UUID id, CancelarReservaRequest request, UUID usuarioAutenticadoId) {
         Reserva reserva = obtenerReservaParaActualizar(id);
@@ -119,7 +120,7 @@ public class ReservaServiceImpl implements ReservaService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public ReservaResponse iniciar(UUID id, UUID usuarioAutenticadoId) {
         Reserva reserva = obtenerReservaParaActualizar(id);
         if (reserva.getEstado() != EstadoReserva.PROGRAMADA) {
@@ -139,7 +140,7 @@ public class ReservaServiceImpl implements ReservaService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public ReservaResponse finalizar(UUID id, UUID usuarioAutenticadoId) {
         Reserva reserva = obtenerReservaParaActualizar(id);
         if (reserva.getEstado() != EstadoReserva.EN_CURSO) {
@@ -152,7 +153,7 @@ public class ReservaServiceImpl implements ReservaService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public ReservaResponse marcarNoAsistida(UUID id, UUID usuarioAutenticadoId) {
         Reserva reserva = obtenerReservaParaActualizar(id);
         if (reserva.getEstado() != EstadoReserva.PROGRAMADA) {
