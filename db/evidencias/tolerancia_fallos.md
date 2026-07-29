@@ -48,3 +48,36 @@ Archivo:
 
 ### Figura 4
 Configuración de replicación con tres réplicas.
+
+Archivo:
+- replicacion_num_replicas_3.png
+
+### Figura 5
+Carga correcta de 100000 registros.
+
+Archivo:
+- conteo_100000_registros.png
+
+### Figura 6
+Prueba con un nodo fuera de servicio.
+
+Archivo:
+- tolerancia_fallo_un_nodo.png
+
+### Figura 7
+Prueba con dos nodos fuera de servicio.
+
+Archivo:
+- tolerancia_fallo_dos_nodos.png
+
+### Figura 8
+Recuperación completa del clúster.
+
+Archivo:
+- recuperacion_cluster_3_nodos.png
+
+### Figura 9
+Latencia antes del fallo.
+
+Archivo:
+- latencia_antes_fallo.png
