@@ -48,7 +48,55 @@
         <mxCell id="svc_reservas" value="reservas-solicitudes-service&#10;:8084" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="630" y="250" width="210" height="50" as="geometry" />
         </mxCell>
+<!-- Frontend -> services -->
+        <mxCell id="e_fe_auth" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=0.4;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="frontend" target="svc_auth">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fe_usuarios" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=0.45;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="frontend" target="svc_usuarios">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fe_academico" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=0.55;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="frontend" target="svc_academico">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_fe_reservas" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=0.6;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="frontend" target="svc_reservas">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
 
+        <!-- Integración entre servicios -->
+        <mxCell id="e_auth_usuarios" value="USUARIOS_SERVICE_URL&#10;(valida usuario)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=0.7;exitY=0;entryX=0.2;entryY=0;fontSize=8;strokeColor=#82b366;" edge="1" parent="1" source="svc_auth" target="svc_usuarios">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="330" y="230" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_reservas_usuarios" value="USUARIOS_SERVICE_URL&#10;(consulta usuario)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;exitX=0.3;exitY=0;entryX=0.8;entryY=0;fontSize=8;" edge="1" parent="1" source="svc_reservas" target="svc_usuarios">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="220" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Bases de datos por servicio -->
+        <mxCell id="db_auth" value="cockroach-auth&#10;(nodo único, v26.2.0)&#10;DB: auth_db&#10;:26257 / :8088" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="50" y="330" width="160" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="db_usuarios" value="cockroach-usuarios&#10;(nodo único, v24.3.5)&#10;DB: usuarios_db&#10;:26258 / :8089" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="230" y="330" width="160" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="db_academico" value="cockroach-academico&#10;(nodo único, v26.2.0)&#10;DB: academico_db&#10;:26259 / :8090" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="410" y="330" width="200" height="65" as="geometry" />
+        </mxCell>
+
+        <!-- Cluster CockroachDB E3 para reservas -->
+        <mxCell id="clusterE3" value="CockroachDB Cluster E3" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontStyle=1;fontSize=10;spacingTop=4;" vertex="1" parent="1">
+          <mxGeometry x="630" y="330" width="210" height="245" as="geometry" />
+        </mxCell>
+        <mxCell id="node1" value="crdb-e3-1&#10;:26261" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontSize=8;" vertex="1" parent="1">
+          <mxGeometry x="640" y="360" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="node2" value="crdb-e3-2&#10;:26262"
 
 
 
