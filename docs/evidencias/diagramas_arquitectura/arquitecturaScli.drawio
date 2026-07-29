@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-07-28T00:00:00.000Z" agent="Claude" version="24.0.0" type="device">
+  <diagram id="scli-real" name="Arquitectura Real SCLI">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="1080" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Outer border -->
+        <mxCell id="outer" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="10" y="10" width="880" height="1060" as="geometry" />
+        </mxCell>
+
+        <!-- Title -->
+        <mxCell id="title" value="ARQUITECTURA REAL DEL PROYECTO SCLI (según docker-compose.yml — GitHub, main)" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="30" y="25" width="840" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Nota: aún no existen API Gateway, Discovery Server, cache ni broker de mensajería en el compose actual — cada servicio expone su puerto directamente." style="text;html=1;align=center;verticalAlign=middle;fontStyle=2;fontSize=9;fontColor=#7a7a7a;" vertex="1" parent="1">
+          <mxGeometry x="30" y="52" width="840" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- Usuario / Frontend -->
+        <mxCell id="usuario" value="Usuario" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="365" y="85" width="150" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="frontend" value="scli-front&#10;(Frontend)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="365" y="145" width="150" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="e_usuario_frontend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;" edge="1" parent="1" source="usuario" target="frontend">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Docker network container -->
+        <mxCell id="dockerNet" value="RED DOCKER: scli-network  (docker-compose.yml)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;verticalAlign=top;fontStyle=1;fontSize=12;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="30" y="210" width="840" height="400" as="geometry" />
+        </mxCell>
+
+        <!-- Microservicios -->
+        <mxCell id="svc_auth" value="auth-service ✔&#10;:8081" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="250" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="svc_usuarios" value="usuarios-service&#10;:8082" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="230" y="250" width="160" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="svc_academico" value="academico-laboratorios-service&#10;:8083" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="410" y="250" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="svc_reservas" value="reservas-solicitudes-service&#10;:8084" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="630" y="250" width="210" height="50" as="geometry" />
+        </mxCell>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
