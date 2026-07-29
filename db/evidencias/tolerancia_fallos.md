@@ -25,3 +25,26 @@ Verificar el comportamiento del clúster CockroachDB de tres nodos ante la caíd
 | Dos nodos fuera de servicio | Sin disponibilidad (pérdida de quórum) | No aplica |
 
 ---
+
+## Evidencias
+
+### Figura 1
+Clúster con los tres nodos activos.
+
+Archivo:
+- cluster_3_nodos_estado.png
+
+### Figura 2
+Clúster levantado en Docker.
+
+Archivo:
+- cluster_3_nodos_docker.png
+
+### Figura 3
+Esquema de tablas de la base de datos.
+
+Archivo:
+- schema_tablas_cluster.png
+
+### Figura 4
+Configuración de replicación con tres réplicas.
