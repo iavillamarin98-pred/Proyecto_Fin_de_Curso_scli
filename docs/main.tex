@@ -774,3 +774,125 @@ ADR-003 no puede materializarse simplemente añadiendo cláusulas
 explícita que distinga el esquema ya aplicado del esquema fragmentado, lo
 que se documenta como trabajo pendiente hacia la E4. La
 Figura~\ref{fig:docker} muestra los tres contenedores del clúster E3
+activos junto al resto de servicios del sistema.
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/cluster_3_nodos_docker.png}
+  \caption{Los tres nodos \texttt{scli-crdb-e3-*} activos en Docker, junto al
+  resto de servicios del sistema SCLI.}
+  \label{fig:docker}
+\end{figure}
+
+\subsection{Integración con aislamiento serializable}
+\label{sec:serializable}
+
+El Módulo A de la guía de la entrega exige explicitar transacciones con
+nivel \texttt{SERIALIZABLE} al refactorizar el microservicio principal.
+En \texttt{reservas-solicitudes-service}, las operaciones que modifican el
+estado de una solicitud o de una reserva --aprobar, rechazar, cancelar,
+crear una reserva a partir de una solicitud aprobada-- están anotadas
+explícitamente con \texttt{@Transactional(isolation =
+  Isolation.SERIALIZABLE)} en la capa de servicio, como muestra el
+Listado~\ref{lst:isolation}.
+
+\begin{lstlisting}[language=Java,caption={Transacción serializable en la aprobación de una solicitud (\texttt{SolicitudReservaServiceImpl.java}).},label={lst:isolation}]
+@Override
+@Transactional(
+    isolation = Isolation.SERIALIZABLE)
+public ReservaResponse aprobar(
+    UUID id,
+    AprobarSolicitudRequest request,
+    String claveIdempotencia,
+    UUID usuarioAutenticadoId) {
+  SolicitudReserva solicitud =
+    solicitudReservaRepository
+      .findByIdForUpdate(id)
+      .orElseThrow(() ->
+        new IllegalArgumentException(
+          "No existe la solicitud"));
+  // ... validación de conflicto de
+  // horario y transición de estado
+}
+\end{lstlisting}
+
+Este nivel de aislamiento es intencional y directamente relacionado con el
+teorema CAP discutido en la Sección~\ref{sec:teoria}: CockroachDB
+implementa \texttt{SERIALIZABLE} como su único nivel de aislamiento
+transaccional --a diferencia de PostgreSQL, que ofrece varios niveles y usa
+\texttt{READ COMMITTED} por defecto-- precisamente para sostener la
+consistencia fuerte que su posicionamiento como sistema CP promete. La
+combinación de \texttt{findByIdForUpdate} (que adquiere un bloqueo de fila)
+con aislamiento serializable es la salvaguarda de aplicación contra dos
+aprobaciones concurrentes de la misma solicitud, un escenario de
+concurrencia real del dominio de reservas de laboratorios que no se limita
+a una preocupación teórica: dos docentes podrían intentar aprobar la misma
+solicitud casi simultáneamente desde sesiones distintas del sistema.
+
+\subsection{Reproducibilidad y trazabilidad}
+
+Todo el trabajo de esta entrega se desarrolló en la rama
+\texttt{feature/entrega-3}, integrada a \texttt{main} mediante solicitudes
+de extracción (\emph{pull requests}) individuales por integrante --con
+ramas propias \texttt{feature/entrega-3-farinango},
+\texttt{feature/entrega-3-villamarin}, \texttt{feature/entrega-3-urbina} y
+\texttt{feature/entrega-3-vinueza}-- y revisión cruzada antes de cada
+fusión, siguiendo el mismo flujo de trabajo establecido en la entrega
+anterior. El archivo \texttt{.env.example} del repositorio documenta las
+variables de entorno necesarias para levantar el sistema completo,
+incluidas las credenciales del clúster E3, y el comando
+\texttt{docker compose up -d} desde la raíz del repositorio construye y
+levanta los cuatro microservicios, el \texttt{api-gateway}, las tres
+instancias CockroachDB de un solo nodo y el clúster de tres nodos en un
+único paso, sin configuración manual adicional. La carga de datos de
+referencia (Sección~\ref{sec:carga}) es determinista: el generador de las
+100\,000 filas de \texttt{solicitudes\_reserva} produce siempre el mismo
+conjunto de datos a partir de una semilla fija, lo que permite repetir la
+verificación de tolerancia a fallos sobre exactamente el mismo volumen de
+datos en ejecuciones futuras.
+
+\subsection{Verificación de estado y del esquema aplicado}
+\label{sec:verificacion}
+
+El comando \texttt{cockroach node status --insecure}, ejecutado sobre el
+nodo \texttt{crdb-e3-1}, confirma que los tres nodos se reconocen
+mutuamente y reportan \texttt{is\_live=true} e \texttt{is\_available=true}
+(Figura~\ref{fig:status}). El esquema aplicado en la base de datos
+\texttt{reservas\_db} contiene las cinco tablas del dominio de reservas más
+la tabla de control de migraciones de Flyway
+(Figura~\ref{fig:schema}), confirmando que la inicialización del clúster
+se completó correctamente.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/cluster_3_nodos_estado.png}
+  \caption{Estado de los tres nodos del clúster E3 (\texttt{cockroach node
+  status}): los tres reportan \texttt{is\_live=true}.}
+  \label{fig:status}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/schema_tablas_cluster.png}
+  \caption{Tablas del esquema \texttt{reservas\_db} aplicado en el clúster
+  E3.}
+  \label{fig:schema}
+\end{figure}
+
+La consulta \texttt{SHOW ZONE CONFIGURATION FOR RANGE default} confirma que
+la política de replicación del ADR-004 quedó efectivamente configurada con
+\texttt{num\_replicas = 3} (Figura~\ref{fig:replicas}).
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/replicacion_num_replicas_3.png}
+  \caption{Configuración de zona del rango \texttt{default}, con
+  \texttt{num\_replicas = 3} aplicado.}
+  \label{fig:replicas}
+\end{figure}
+
+\subsection{Carga de datos de referencia}
+\label{sec:carga}
+
+Se cargó la tabla \texttt{solicitudes\_reserva} con 100\,000 filas mediante
+un generador reproducible, en lotes de 10\,000 filas. La
+Figura~\ref{fig:carga100k} muestra la verificación del conteo total
