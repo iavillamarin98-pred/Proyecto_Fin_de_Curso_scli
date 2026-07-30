@@ -1162,3 +1162,229 @@ def agregar_participantes_por_periodo(
 \subsection{Configuración de lectura distribuida}
 
 La lectura JDBC del pipeline Spark se parametriza para leer en paralelo por
+particiones de la columna \texttt{id}, evitando que la extracción completa
+del clúster se sirva desde un único nodo lector. La configuración por
+defecto establece 16 particiones de lectura sobre el rango de
+identificadores del conjunto de datos, y la sesión de Spark se construye
+con \texttt{spark.sql.shuffle.partitions} ajustado explícitamente en lugar
+de usar el valor por defecto de 200 particiones, que resultaría
+sobredimensionado para un volumen de $10^5$ filas y produciría una sobrecarga
+de coordinación desproporcionada frente al trabajo útil por partición. La
+cadena de conexión y las credenciales se externalizan mediante las
+variables de entorno \texttt{RESERVAS\_JDBC\_URL},
+\texttt{RESERVAS\_DB\_USERNAME} y \texttt{RESERVAS\_DB\_PASSWORD}, con
+valores por defecto que apuntan a los tres puertos SQL locales del clúster
+E3 (\texttt{26261}, \texttt{26262}, \texttt{26263}), de modo que el
+controlador JDBC de PostgreSQL pueda alternar entre nodos si alguno no
+responde.
+
+\subsection{Detalle de la transformación de combinación}
+
+La segunda transformación del pipeline --la combinación entre solicitudes
+y reservas activas-- ilustra una decisión de diseño relevante para la
+correspondencia entre ambas implementaciones: en lugar de unir todas las
+columnas de ambas tablas y arrastrar sufijos ambiguos, ambas versiones
+seleccionan y renombran explícitamente solo las catorce columnas
+necesarias para las transformaciones posteriores, tal como se aprecia en el
+Listado~\ref{lst:join}.
+
+\begin{lstlisting}[language=Python,caption={Combinación explícita de columnas en \texttt{pipeline.py}.},label={lst:join}]
+def unir_solicitudes_con_reservas(
+    solicitudes, reservas):
+    s = solicitudes.alias("solicitud")
+    r = reservas.alias("reserva")
+    return s.join(
+        r,
+        F.col("solicitud.id") ==
+          F.col("reserva.solicitud_id"),
+        "inner",
+    ).select(
+        F.col("reserva.id")
+          .alias("reserva_id"),
+        F.col("reserva.laboratorio_id"),
+        F.col("reserva.fecha_reserva"),
+        F.col("solicitud.solicitante_id"),
+        F.col("solicitud.docente_id"),
+        F.col("solicitud.numero_"
+          "participantes"),
+    )
+\end{lstlisting}
+
+Esta decisión --preferir una proyección explícita de columnas sobre un
+\texttt{join} sin seleccionar-- reduce el volumen de datos que viaja entre
+etapas del plan de ejecución distribuido de Spark y elimina la ambigüedad
+de nombres de columna duplicados entre \texttt{solicitudes\_reserva} y
+\texttt{reservas} (ambas tienen columnas \texttt{id},
+\texttt{laboratorio\_id} y \texttt{fecha\_reserva}), que de otro modo
+obligaría a resolver sufijos automáticos tanto en la versión Spark como en
+la versión pandas de manera potencialmente inconsistente.
+
+\subsection{Estado de implementación}
+
+A la fecha de este informe, tanto \texttt{pipeline.py} como
+\texttt{baseline.py} están completos y son ejecutables de forma
+independiente contra el clúster E3, pero \textbf{ninguno de los dos se ha
+ejecutado todavía de manera sistemática} sobre el dataset de referencia de
+100\,000 filas cargado en la Sección~\ref{sec:cluster}. El
+Listado~\ref{lst:orquestador} resume el orquestador experimental
+(\texttt{experiments/run\_comparison.py}) construido para automatizar esa
+comparación cuando se ejecute: alterna el orden de los dos tratamientos,
+descarta una iteración de calentamiento, muestrea CPU y memoria del árbol
+de procesos con \texttt{psutil}, y registra una observación por repetición
+conforme al esquema JSON \texttt{experiments/metrics/metric-schema.json}.
+
+\begin{lstlisting}[language=Python,caption={Firma de los tratamientos configurados en \texttt{experiment-config.json}.},label={lst:orquestador}]
+"treatments": [
+  {"id": "pandas-baseline",
+   "entrypoint": "spark/baseline.py"},
+  {"id": "pyspark-pipeline",
+   "entrypoint": "spark/pipeline.py"}
+],
+"execution": {
+  "warmup_iterations": 1,
+  "measured_iterations": 5,
+  "alternate_treatment_order": true
+}
+\end{lstlisting}
+
+El archivo de resultados agregados (\texttt{experiments/metrics/results/
+comparacion.csv}) existe en el repositorio como una plantilla vacía --con
+sus 26 columnas declaradas y ninguna fila de datos-- que el orquestador
+completará únicamente cuando se ejecuten repeticiones reales. No se
+presenta en este informe ninguna cifra de \emph{speedup}, uso de CPU o
+memoria para el par pandas/PySpark, precisamente porque esa medición no
+existe todavía; sí se documenta el protocolo con el que se generará
+(Sección~\ref{sec:protocolo}).
+
+\section{Protocolo experimental y resultados}
+\label{sec:protocolo}
+
+\subsection{Diseño del protocolo}
+
+El protocolo experimental (\texttt{experiments/protocolo-experimental.md})
+sigue las recomendaciones de Jain~\cite{baltes2022sampling} y de
+Wohlin~\emph{et al.}~\cite{verdecchia2023} para la comparación de sistemas de
+cómputo, y define, sin ejecutarlos todavía, los siguientes elementos:
+
+\textbf{Hipótesis.} $H_1$: el pipeline paralelo con $N$ núcleos presenta un
+tiempo medio de ejecución menor que la línea base secuencial para
+$|D| \geq 5\times10^5$ registros; $H_0$: no hay diferencia significativa.
+
+\textbf{Variable independiente.} Motor de procesamiento
+(\texttt{pandas-baseline} o \texttt{pyspark-pipeline}).
+
+\textbf{Variables dependientes.} Tiempo total de ejecución en milisegundos,
+utilización media y máxima de CPU, memoria residente media y máxima, filas
+procesadas y rendimiento en filas por segundo.
+
+\textbf{Variables controladas.} Versión del conjunto de datos, estado de
+CockroachDB antes de cada tratamiento, equipo y recursos disponibles,
+versiones de Python, pandas, Java y Spark, configuración de Spark, número
+de repeticiones y calentamientos, y procesos externos activos durante la
+medición.
+
+\textbf{Diseño.} Preparación de una instantánea identificable del conjunto
+de datos; registro del entorno y las versiones; iteraciones de calentamiento
+excluidas de los resultados; alternancia del orden de los tratamientos para
+reducir el sesgo de caché y de orden de ejecución; $r=10$ repeticiones
+medidas por tratamiento (según el Anexo A de la guía de la entrega), de las
+cuales se descartan la primera y la última como calentamiento y
+enfriamiento; registro de una observación por ejecución conforme al esquema
+JSON, incluidas las ejecuciones fallidas.
+
+\textbf{Análisis planificado.} Media $\bar t$, desviación típica $s$ e
+intervalo de confianza al 95\,\% mediante
+$\bar t \pm 1.96 \cdot s/\sqrt{r}$; contraste con prueba $t$ pareada si se
+cumple el supuesto de normalidad, o prueba de Wilcoxon en caso contrario.
+
+\subsection{Esquema de registro de observaciones}
+
+Cada ejecución medida se registra conforme al esquema JSON
+\texttt{experiments/metrics/metric-schema.json}, que declara como campos
+obligatorios un identificador único de ejecución (\texttt{run\_id}), la
+versión del protocolo, el tratamiento (\texttt{pandas-baseline} o
+\texttt{pyspark-pipeline}), el identificador y la instantánea del conjunto
+de datos, marcas de tiempo de inicio y fin, duración en milisegundos,
+utilización de CPU media y máxima, memoria residente media y máxima, filas
+procesadas, rendimiento en filas por segundo, estado de la ejecución
+(\texttt{completed}, \texttt{failed} o \texttt{timeout}) y una descripción
+del entorno de ejecución (equipo, sistema operativo, modelo de CPU, número
+de núcleos lógicos, memoria del sistema y versiones de Python, pandas, Java
+y Spark). Esta granularidad permite, entre otras cosas, detectar si una
+diferencia de rendimiento observada se debe al motor de procesamiento o a
+un cambio de entorno entre ejecuciones, y es la misma estructura que se
+reutilizará para las métricas Prometheus incrementales previstas para la
+E4.
+
+\textbf{Condiciones de validez de una repetición.} Una repetición se
+considera válida cuando termina sin error y produce el resultado esperado;
+los dos tratamientos deben procesar la misma cantidad de filas de entrada
+para que la comparación sea funcionalmente equivalente; los datos fuente no
+deben modificarse entre tratamientos equivalentes; y una interrupción
+externa debe registrarse como ejecución fallida en lugar de eliminarse
+silenciosamente del conjunto de datos. El rendimiento se calcula siempre
+\emph{a posteriori} a partir de filas procesadas y tiempo de ejecución
+medidos; el protocolo prohíbe explícitamente registrar valores estimados o
+interpolados en el archivo de resultados, precisamente para evitar la
+situación --que este informe busca no repetir-- de presentar una cifra sin
+respaldo empírico directo.
+
+\subsection{Resultados disponibles}
+
+De los dos frentes experimentales de esta entrega, únicamente la
+verificación de tolerancia a fallos del clúster (Tabla~\ref{tab:latencia},
+Sección~\ref{sec:tolerancia}) cuenta con evidencia medida, y se trata de
+una observación puntual por escenario, no de una serie con repeticiones. La
+comparación pandas/PySpark descrita en el protocolo anterior no tiene
+ejecuciones registradas: el archivo de resultados agregados está vacío y
+ningún valor de \emph{speedup}, $p$ estimado en la Ecuación~\eqref{eq:amdahl},
+ni intervalo de confianza puede reportarse honestamente en este informe.
+Esta limitación se retoma como principal amenaza a la validez de conclusión
+en la Sección~\ref{sec:discusion}.
+
+\subsection{Estado de cumplimiento por módulo}
+
+La Tabla~\ref{tab:modulos} resume, para los siete módulos técnicos
+definidos en la guía de la entrega (Módulos A a G), el estado alcanzado a
+la fecha de este informe, distinguiendo explícitamente entre lo completado,
+lo parcialmente completado y lo pendiente, en lugar de reportar un estado
+binario que ocultaría matices relevantes para la defensa oral.
+
+\begin{table}[t]
+\centering
+\caption{Estado de cumplimiento de los módulos técnicos de la E3.}
+\label{tab:modulos}
+\small
+\begin{tabular}{@{}p{2.6cm}p{5cm}@{}}
+\toprule
+\textbf{Módulo} & \textbf{Estado} \\
+\midrule
+A. Refactorización & Reservas migrado al clúster; los otros tres
+microservicios sin cambios (alcance acotado, Sección~\ref{sec:cluster}). \\
+B. Esquema distribuido & ADR-003 aprobado; DDL de partición pendiente. \\
+C. Clúster Docker & Completo y verificado (Sección~\ref{sec:cluster}). \\
+D. Tolerancia a fallos & Completo, con evidencia y bitácora; latencia
+puntual, no repetida. \\
+E. Pipeline Spark & Código completo (5 transformaciones); sin ejecución
+sobre el dataset de referencia. \\
+F. Protocolo experimental & Diseñado con detalle; sin repeticiones
+ejecutadas. \\
+G. Métricas Prometheus & No iniciado en este ciclo. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Discusión}
+\label{sec:discusion}
+
+\subsection{Interpretación}
+
+La verificación de tolerancia a fallos confirma, sobre datos y
+contenedores propios del equipo, el comportamiento teórico descrito en la
+Sección~\ref{sec:teoria}: con factor de replicación $f=3$ y quórum de
+escritura $2$, el clúster tolera exactamente la caída de un nodo y pierde
+disponibilidad de escritura al perder dos de tres réplicas por rango. El
+incremento moderado de latencia observado al caer un nodo (de 2604.54\,ms a
+2681.40\,ms, un 2.9\,\% adicional) es consistente con el costo de que el
+grupo Raft opere con dos réplicas activas en lugar de tres, aunque una
+diferencia de este tamaño sobre una sola observación no permite descartar
