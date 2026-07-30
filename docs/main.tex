@@ -1,1 +1,150 @@
-//aqui va el informe latex completo de la entrega tres
+% ============================================================================
+% Informe Entrega 3 (E3) - SCLI - Aplicaciones Distribuidas (ISR-701)
+% UTEQ - Facultad de Ciencias de la Computación - Ingeniería de Software
+% Equipo PFC: ForáCode
+% Compilar con: pdflatex (dos pasadas). Ver README.md.
+% IEEEtran.cls no está disponible en este entorno; se reproduce el estilo
+% IEEE (dos columnas, numeración de secciones, citas IEEE) con article.cls.
+% ============================================================================
+\documentclass[10pt,twocolumn]{article}
+
+% --- Codificación y tipografía compatibles con pdfLaTeX ---------------------
+% fontspec/polyglossia se sustituyen por el mecanismo clásico de LaTeX porque
+% este entorno no dispone de luaotfload/XeTeX de forma estable con pdfLaTeX.
+% newtxtext/newtxmath no están instalados en este sistema; se emplea el
+% paquete PSNFSS estándar (mathptmx/helvet/courier), que es la alternativa
+% habitual y produce el mismo tipo de letra Times con soporte matemático
+% completo para pdfLaTeX. La opción provide=* de babel es necesaria porque
+% este TeX Live no incluye el archivo clásico spanish.ldf del paquete
+% babel-spanish, solo los locales nuevos basados en .ini.
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish,provide=*]{babel}
+\usepackage[margin=1.9cm,columnsep=0.6cm]{geometry}
+\usepackage{mathptmx}
+\usepackage{helvet}
+\usepackage{courier}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black,pdftitle={SCLI - Entrega 3},pdfauthor={Equipo ForáCode}}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{abstract}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric}
+
+\definecolor{codebg}{HTML}{F5F5F5}
+\definecolor{codekw}{HTML}{1B4F8C}
+\definecolor{codestr}{HTML}{0B7285}
+\definecolor{codecom}{HTML}{6A737D}
+
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecom}\itshape,
+  stringstyle=\color{codestr},
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{black!30},
+  breaklines=true,
+  showstringspaces=false,
+  numbers=left,
+  numberstyle=\tiny\color{black!50},
+  numbersep=5pt,
+  captionpos=b,
+  tabsize=2,
+  columns=flexible,
+  extendedchars=true,
+  literate=%
+    {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+    {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+    {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {ü}{{\"u}}1 {Ü}{{\"U}}1 {¿}{{?`}}1 {¡}{{!`}}1,
+}
+\lstdefinelanguage{sql}{
+  morekeywords={CREATE,TABLE,DATABASE,IF,NOT,EXISTS,USE,PARTITION,BY,RANGE,ALTER,CONFIGURE,ZONE,USING,VALUES,SELECT,FROM,WHERE,INSERT,INTO,COUNT,PRIMARY,KEY,CONSTRAINT,CHECK,UNIQUE,INDEX,ON,COMMENT,COLUMN,IS,DEFAULT},
+  morecomment=[l]{--},
+  morestring=[b]',
+  sensitive=false,
+}
+
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection.}{0.5em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\itshape}{\thesubsubsection.}{0.5em}{}
+
+\newcommand{\RepoURL}{https://github.com/iavillamarin98-pred/Proyecto\_Fin\_de\_Curso\_scli}
+
+% Encabezado (fancyhdr) eliminado según instrucción; se conserva la
+% numeración de página normal (\pagestyle{plain}, predeterminado de
+% article.cls) y la numeración de secciones estándar de LaTeX.
+\pagestyle{plain}
+
+\begin{document}
+
+% ---------------------------------------------------------------------------
+\twocolumn[
+\begin{center}
+{\LARGE\bfseries Capa de datos distribuida y pipeline analítico paralelo
+para el Sistema de Control de Laboratorios e Informática (SCLI)}
+
+\vspace{6pt}
+{\large Entrega 3 del Proyecto Fin de Curso}
+
+\vspace{10pt}
+{\normalsize
+Freddy Farinango, Iván Villamarín, Isaías Urbina, Harold Vinueza
+
+Equipo PFC ForáCode
+
+Carrera de Ingeniería de Software, Facultad de Ciencias de la Computación
+
+Universidad Técnica Estatal de Quevedo (UTEQ), Ecuador
+
+\texttt{\RepoURL}
+}
+
+\vspace{12pt}
+\end{center}
+]
+
+\begin{abstract}
+Este informe documenta la Entrega 3 (E3) del Proyecto Fin de Curso del
+sistema SCLI (Sistema de Control de Laboratorios e Informática), centrada en
+la capa de persistencia distribuida y el pipeline analítico paralelo que
+completan la arquitectura de microservicios construida en entregas previas.
+Se diseñó e implementó un esquema de fragmentación horizontal temporal y
+replicación triple sobre un clúster CockroachDB de tres nodos dedicado al
+microservicio de reservas y solicitudes, documentado mediante dos registros
+de decisión arquitectónica (ADR). Se verificó experimentalmente la
+tolerancia a fallos del clúster ante la caída de uno y de dos nodos,
+observando disponibilidad continua con quórum de dos réplicas y pérdida de
+disponibilidad al perder el quórum, consistente con las garantías teóricas
+del algoritmo de consenso Raft. Se implementó además un pipeline de
+procesamiento paralelo en PySpark con cinco transformaciones sobre el
+esquema de reservas y una línea base equivalente en pandas, ambos
+funcionalmente completos pero, a la fecha de este informe, sin ejecuciones
+registradas del protocolo comparativo. El informe documenta con honestidad
+tanto lo alcanzado como lo pendiente, y traza la ruta de integración con la
+Entrega 4.
+\end{abstract}
+
+\begin{abstract}
+\textbf{Abstract.} This report documents the third deliverable (E3) of the
+capstone project for SCLI (Laboratory and Computing Resources Control
+System), focused on the distributed persistence layer and the parallel
+analytics pipeline that complete the microservice architecture built in
+previous deliverables. A temporal horizontal-fragmentation and
+triple-replication schema was designed and implemented over a
+three-node CockroachDB cluster dedicated to the reservations microservice,
+documented through two architectural decision records (ADR). Cluster fault
+tolerance was experimentally verified under single- and double-node
+failures, observing continued availability with a two-replica quorum and
+unavailability upon quorum loss, consistent with the theoretical guarantees
+of the Raft consensus algorithm. A parallel processing pipeline with five
