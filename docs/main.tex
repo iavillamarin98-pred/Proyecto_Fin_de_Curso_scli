@@ -896,3 +896,269 @@ la política de replicación del ADR-004 quedó efectivamente configurada con
 Se cargó la tabla \texttt{solicitudes\_reserva} con 100\,000 filas mediante
 un generador reproducible, en lotes de 10\,000 filas. La
 Figura~\ref{fig:carga100k} muestra la verificación del conteo total
+mediante \texttt{SELECT COUNT(*)} tras completar la carga.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/carga_100000_registros.png}
+  \caption{Verificación del conteo total (100\,000 filas) en
+  \texttt{solicitudes\_reserva} tras la carga por lotes.}
+  \label{fig:carga100k}
+\end{figure}
+
+\subsubsection{Metodología de generación}
+
+El repositorio versiona diez archivos \texttt{db/seeds\_01.sql} a
+\texttt{db/seeds\_10.sql} de 10\,000 sentencias \texttt{INSERT} cada uno,
+más un \texttt{db/seeds.sql} de referencia con los valores de configuración
+mínimos necesarios para que las restricciones \texttt{CHECK} del esquema
+--como la verificación \texttt{hora\_fin > hora\_inicio}, mostrada en el
+Listado~\ref{lst:schema}-- se satisfagan en cada fila generada. Dividir la
+carga en diez archivos de 10\,000 filas, en lugar de un único archivo de
+100\,000, respondió a una razón práctica: permite verificar el conteo
+parcial tras cada lote (como se documentó en la bitácora del equipo con la
+captura de la carga del primer lote) antes de continuar con el siguiente,
+detectando así cualquier violación de restricción temprano en el proceso en
+lugar de al final de una transacción de gran tamaño. Los identificadores
+UUID de solicitante, docente, laboratorio, materia y periodo lectivo
+referenciados en las filas generadas son valores fijos y deterministas, no
+extraídos de los otros tres microservicios del sistema; esto es coherente
+con el diseño sin claves foráneas entre bases de datos descrito en la
+Sección~\ref{sec:esquema}, pero implica que el conjunto de datos de
+referencia es sintético y no representa necesariamente la distribución real
+de solicitudes que produciría el sistema en operación, limitación que se
+retoma en la Sección~\ref{sec:discusion}.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/seeds_sql_creado.png}
+  \caption{Fragmento de \texttt{db/seeds\_05.sql}: sentencia
+  \texttt{INSERT} de configuración de reservas con los parámetros mínimos y
+  máximos exigidos por las restricciones del esquema.}
+  \label{fig:seeds}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/carga_lote_01_10000.png}
+  \caption{Verificación del conteo parcial (10\,000 filas) tras cargar el
+  primer lote de \texttt{db/seeds\_01.sql}.}
+  \label{fig:lote1}
+\end{figure}
+
+\subsection{Verificación experimental de tolerancia a fallos}
+\label{sec:tolerancia}
+
+Siguiendo el protocolo del Módulo D de la guía de la entrega, se ejecutó la
+siguiente secuencia sobre el clúster con las 100\,000 filas ya cargadas:
+(i)~consulta \texttt{SELECT COUNT(*)} con los tres nodos operativos;
+(ii)~detención abrupta del nodo \texttt{scli-crdb-e3-2} con
+\texttt{docker stop}; (iii)~reconsulta con un nodo caído;
+(iv)~reincorporación del nodo detenido y reconsulta tras la reconvergencia;
+(v)~repetición del experimento deteniendo dos de los tres nodos. La
+Tabla~\ref{tab:latencia} resume los resultados de latencia observados.
+
+\begin{table}[t]
+  \centering
+  \caption{Latencia de \texttt{SELECT COUNT(*)} por escenario de disponibilidad del clúster.}
+  \label{tab:latencia}
+  \small
+  \begin{tabular}{@{}p{3.6cm}p{2.4cm}r@{}}
+    \toprule
+    \textbf{Escenario} & \textbf{Resultado} & \textbf{Latencia} \\
+    \midrule
+    Clúster operativo (3 nodos) & Consulta exitosa & 2604.54 ms \\
+    Un nodo fuera de servicio & Consulta exitosa & 2681.40 ms \\
+    Clúster recuperado (3 nodos) & Consulta exitosa & 2906.34 ms \\
+    Dos nodos fuera de servicio & Sin quórum & No aplica \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Las Figuras~\ref{fig:1nodo} y~\ref{fig:2nodos} muestran la evidencia de
+consola de ambos escenarios de fallo. Con un nodo caído, \texttt{cockroach
+node status} reporta al nodo detenido con \texttt{is\_live=false} mientras
+los otros dos permanecen disponibles, y la consulta se sirve con éxito
+porque el grupo Raft de cada rango conserva su mayoría de dos réplicas de
+tres. Con dos nodos caídos, ningún rango conserva mayoría y la consulta no
+puede completarse hasta restablecer el quórum, consistente con la
+Sección~\ref{sec:teoria}.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/tolerancia_fallo_un_nodo.png}
+  \caption{Un nodo detenido (\texttt{crdb-e3-2}): el clúster conserva quórum
+  y la consulta se ejecuta con éxito.}
+  \label{fig:1nodo}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/tolerancia_fallo_dos_nodos.png}
+  \caption{Dos nodos detenidos: los tres nodos reportan
+  \texttt{is\_live=false} y el clúster pierde disponibilidad de escritura.}
+  \label{fig:2nodos}
+\end{figure}
+
+Tras reiniciar el nodo detenido, el clúster recuperó su estado de los tres
+nodos operativos (Figura~\ref{fig:recuperacion}), confirmando que la
+reconvergencia de Raft no requirió intervención manual adicional más allá
+de reiniciar el proceso del nodo.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/recuperacion_cluster_3_nodos.png}
+  \caption{Recuperación completa del clúster tras reiniciar el nodo
+  detenido.}
+  \label{fig:recuperacion}
+\end{figure}
+
+\subsubsection{Evidencia de las mediciones de latencia}
+
+Las Figuras~\ref{fig:latantes}--\ref{fig:latdespues} muestran las capturas
+de consola de PowerShell (\texttt{Measure-Command}) que respaldan cada una
+de las tres latencias numéricas de la Tabla~\ref{tab:latencia}, medidas
+con el mismo comando \texttt{SELECT COUNT(*)} sobre
+\texttt{solicitudes\_reserva} en los tres escenarios de disponibilidad del
+clúster.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/latencia_antes_fallo.png}
+  \caption{Latencia con los tres nodos operativos: 2604.54\,ms.}
+  \label{fig:latantes}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/latencia_un_nodo_caido.png}
+  \caption{Latencia con un nodo caído: 2681.40\,ms.}
+  \label{fig:latcaido}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{evidencias/latencia_despues_recuperacion.png}
+  \caption{Latencia tras la recuperación completa: 2906.34\,ms.}
+  \label{fig:latdespues}
+\end{figure}
+
+\subsubsection{Nota metodológica sobre la latencia reportada}
+
+Las cuatro latencias de la Tabla~\ref{tab:latencia} corresponden a una
+medición puntual por escenario ($n=1$), no a un promedio de repeticiones.
+El protocolo experimental del Módulo F (Sección~\ref{sec:protocolo}) exige
+$r=10$ repeticiones por nivel con intervalo de confianza al 95\,\%; esa
+ejecución sistemática todavía no se realizó para este escenario de
+tolerancia a fallos, y se documenta explícitamente como trabajo pendiente
+en la Sección~\ref{sec:discusion} en lugar de presentar una única
+observación como si fuera una serie estadística.
+
+\subsection{Pruebas de integración con Testcontainers}
+
+El Módulo A de la guía de la entrega exige actualizar las pruebas de
+integración para levantar el clúster con \emph{Testcontainers} en lugar de
+depender de una base de datos local. \texttt{usuarios-service} y
+\texttt{reservas-solicitudes-service} incorporan sendas pruebas de
+integración (\texttt{CockroachFlywayIntegrationTest} y
+\texttt{CockroachFlywayIntegrationTests}, respectivamente) que instancian
+un contenedor \texttt{CockroachContainer} de la biblioteca
+\texttt{testcontainers-java} en tiempo de ejecución de la prueba,
+registran su URL JDBC dinámicamente mediante
+\texttt{@DynamicPropertySource}, habilitan las migraciones de Flyway sobre
+ese contenedor efímero, y verifican que el esquema se aplique
+correctamente contando las filas de una tabla de referencia poblada por
+las migraciones (once perfiles, en el caso de
+\texttt{usuarios-service}). Esta estrategia --contenedor CockroachDB
+efímero por ejecución de prueba, en lugar de una base compartida entre
+ejecuciones-- es la que garantiza que las pruebas de integración no
+dependan de un estado externo persistente y puedan ejecutarse de forma
+aislada en el flujo de integración continua heredado de la entrega
+anterior. Nótese que estas pruebas verifican la aplicación correcta del
+esquema \emph{mono-nodo} de cada microservicio; la extensión de este mismo
+patrón para levantar el clúster de tres nodos del ADR-004 dentro de una
+prueba de integración --en lugar de contra el entorno Docker Compose
+persistente usado en la Sección~\ref{sec:tolerancia}-- queda como mejora
+concreta para el ciclo de la E4.
+
+\section{Pipeline analítico paralelo}
+\label{sec:pipeline}
+
+\subsection{Arquitectura del pipeline}
+
+El pipeline de PySpark (\texttt{spark/pipeline.py}) obtiene sus fuentes
+directamente del clúster CockroachDB E3 mediante el conector JDBC de
+PostgreSQL --protocolo con el que CockroachDB es compatible-- y aplica
+exactamente cinco transformaciones sobre el dominio de reservas, en el
+mismo orden en su línea base equivalente escrita en pandas
+(\texttt{spark/baseline.py}). El Listado~\ref{lst:pipeline} muestra la
+composición de las transformaciones en la versión Spark.
+
+\begin{lstlisting}[language=Python,caption={Composición de las cinco transformaciones del pipeline (\texttt{spark/pipeline.py}).},label={lst:pipeline}]
+def construir_pipeline(fuentes):
+    reservas_activas = filtrar_reservas_activas(
+        fuentes["reservas"])
+    datos = unir_solicitudes_con_reservas(
+        fuentes["solicitudes_reserva"],
+        reservas_activas)
+    datos = agregar_dimensiones_temporales(datos)
+    datos = agregar_participantes_por_periodo(
+        datos)
+    return categorizar_numero_participantes(
+        datos)
+\end{lstlisting}
+
+Las cinco transformaciones, en orden de aplicación, son:
+
+\begin{enumerate}[leftmargin=*,itemsep=1pt]
+  \item \textbf{Filtrado}: conserva únicamente las reservas en estado
+  \texttt{PROGRAMADA} o \texttt{EN\_CURSO}, descartando canceladas,
+  rechazadas o expiradas.
+  \item \textbf{Combinación (\emph{join})}: relaciona cada reserva activa
+  con los datos de su solicitud de origen mediante una unión interna sobre
+  \texttt{solicitud\_id}, seleccionando y renombrando las columnas
+  relevantes de ambas tablas.
+  \item \textbf{Transformación de tipos temporales}: normaliza
+  \texttt{fecha\_reserva} a tipo fecha y deriva año, trimestre y primer día
+  del mes como columnas de calendario.
+  \item \textbf{Agregación con ventana}: calcula, mediante una función de
+  ventana particionada por laboratorio, año y trimestre, la suma de
+  participantes por periodo (\texttt{participantes\_laboratorio\_trimestre}).
+  \item \textbf{Transformación de aprendizaje automático}: aplica un
+  \texttt{Bucketizer} de \texttt{pyspark.ml.feature} para discretizar el
+  número de participantes de cada reserva en cuatro intervalos numéricos
+  ($<10$, $[10,20)$, $[20,30)$, $\geq 30$).
+\end{enumerate}
+
+La línea base en pandas replica exactamente la misma secuencia lógica: la
+combinación se implementa con \texttt{DataFrame.merge}, la agregación de
+ventana con \texttt{groupby(...).transform('sum')} y la discretización con
+\texttt{pandas.cut} usando los mismos límites de intervalo que el
+\texttt{Bucketizer} de Spark, de modo que ambos tratamientos son
+funcionalmente equivalentes y comparables bajo el mismo conjunto de datos.
+Ambos scripts exportan su resultado en formato Parquet. El
+Listado~\ref{lst:baseline} muestra la función equivalente de agregación por
+ventana en la línea base, que ilustra la correspondencia deliberada entre
+ambas implementaciones.
+
+\begin{lstlisting}[language=Python,caption={Agregación por ventana equivalente en la línea base pandas (\texttt{spark/baseline.py}).},label={lst:baseline}]
+def agregar_participantes_por_periodo(
+    datos):
+    grupos = ["laboratorio_id",
+        "anio_reserva",
+        "trimestre_reserva"]
+    resultado = datos.copy()
+    resultado[
+      "participantes_laboratorio_"
+      "trimestre"] = (
+        resultado
+        .groupby(grupos, dropna=False)
+        ["numero_participantes"]
+        .transform("sum")
+    )
+    return resultado
+\end{lstlisting}
+
+\subsection{Configuración de lectura distribuida}
+
+La lectura JDBC del pipeline Spark se parametriza para leer en paralelo por
