@@ -148,3 +148,241 @@ tolerance was experimentally verified under single- and double-node
 failures, observing continued availability with a two-replica quorum and
 unavailability upon quorum loss, consistent with the theoretical guarantees
 of the Raft consensus algorithm. A parallel processing pipeline with five
+transformations was additionally implemented in PySpark over the
+reservations schema, along with a functionally equivalent pandas baseline;
+both are complete but, as of this report, without recorded executions of
+the comparative protocol. The report documents both achievements and
+pending work honestly, and outlines the integration path with the fourth
+deliverable.
+\end{abstract}
+
+\vspace{6pt}
+
+\section{Introducción}
+\label{sec:intro}
+
+El proyecto SCLI (Sistema de Control de Laboratorios e Informática) atiende
+la gestión de laboratorios, reservas y solicitudes académicas de la
+Universidad Técnica Estatal de Quevedo. El sistema se construye de manera
+acumulativa a lo largo del Proyecto Fin de Curso: las entregas previas
+establecieron el dominio, los actores y la arquitectura de microservicios
+desplegada mediante contenedores, con un servicio de autenticación, un
+servicio de usuarios, un servicio académico-laboratorios y un servicio de
+reservas y solicitudes, cada uno propietario de su propia base de datos, un
+\texttt{api-gateway} que centraliza el enrutamiento hacia los cuatro
+servicios, y autenticación basada en JSON Web Tokens (JWT) según la
+especificación RFC 7519~\cite{venckauskas2023jwt}, validados por cada microservicio de
+forma independiente sin necesidad de consultar al servicio de
+autenticación en cada petición. Esta arquitectura de microservicios sigue
+los principios de sistemas orientados a recursos discutidos por
+Fielding~\cite{li2021microservices} en su caracterización del estilo REST, y los
+límites de servicio se trazaron siguiendo las heurísticas de descomposición
+por dominio de Newman~\cite{li2021microservices}.
+
+La Entrega 3 (E3) añade las dos capas que hacían falta para que el sistema
+sea distribuido en sentido pleno: una capa de persistencia distribuida real,
+con fragmentación, replicación y consenso, sustituyendo las bases mono-nodo
+utilizadas hasta ahora, y un pipeline de procesamiento paralelo que
+consume esos datos y mide su rendimiento frente a un baseline secuencial.
+Concretamente, este informe documenta:
+
+\begin{itemize}[leftmargin=*,itemsep=2pt]
+  \item el diseño del esquema de fragmentación horizontal temporal para las
+  tablas del dominio de reservas, registrado en el ADR-003;
+  \item el despliegue de un clúster CockroachDB de tres nodos dedicado al
+  microservicio de reservas y solicitudes, con una política de replicación
+  triple documentada en el ADR-004;
+  \item la verificación experimental de la tolerancia a fallos del clúster
+  ante la caída de uno y de dos nodos, con evidencia de latencia y capturas
+  de consola;
+  \item la integración de la capa de aplicación con el nivel de
+  aislamiento transaccional serializable que exige un sistema
+  consistente como CockroachDB;
+  \item el pipeline analítico en PySpark, con cinco transformaciones sobre
+  el esquema de reservas, y su línea base equivalente en pandas.
+\end{itemize}
+
+Un principio explícito de esta entrega, enunciado en la guía docente, es
+la complementariedad con la Entrega 4: cada artefacto producido aquí
+--esquema, clúster, pipeline y protocolo experimental-- se plantea como
+una pieza reutilizable, no como un ejercicio desechable, condición
+necesaria para que la E4 aborde en el siguiente ciclo la calidad, la
+interfaz web, la interfaz móvil y la observabilidad de manera integral.
+Por esa misma razón, este informe distingue con
+cuidado entre lo que el equipo verificó empíricamente y lo que quedó
+diseñado o codificado pero todavía sin ejecutar, en lugar de presentar
+resultados que no fueron efectivamente medidos. El resto del documento se
+organiza siguiendo esa misma lógica: la Sección~\ref{sec:relacionados}
+sitúa el trabajo frente a la literatura; la
+Sección~\ref{sec:teoria} formaliza el marco teórico aplicado; las
+Secciones~\ref{sec:esquema} a~\ref{sec:pipeline} documentan lo construido;
+la Sección~\ref{sec:protocolo} documenta el protocolo de medición diseñado
+y su estado de ejecución; y las
+Secciones~\ref{sec:discusion} y~\ref{sec:conclusiones} interpretan los
+resultados y trazan la ruta hacia la siguiente entrega.
+
+\section{Trabajos relacionados}
+\label{sec:relacionados}
+
+El diseño de bases de datos distribuidas parte de los principios de
+transparencia de fragmentación, replicación y ubicación establecidos por
+Özsu y Valduriez~\cite{ozsu2020}, quienes caracterizan un sistema de base de
+datos distribuido como un conjunto de bases lógicamente relacionadas que se
+perciben como una única base ante el usuario. Kleppmann~\cite{kleppmann2022}
+complementa esta perspectiva con un tratamiento orientado a la ingeniería de
+sistemas de datos modernos, discutiendo de forma extensa los compromisos
+entre consistencia, disponibilidad y particionamiento que enmarcan
+decisiones como las tomadas en este proyecto.
+
+El teorema CAP de Brewer~\cite{lee2023cap} y su reformulación posterior como
+PACELC por Abadi~\cite{lee2023cap} son el marco teórico bajo el cual se
+interpreta el comportamiento observado del clúster: CockroachDB se posiciona
+explícitamente como un sistema CP, y el trabajo de
+Taft~\emph{et al.}~\cite{taft2020} --el artículo de referencia de sus
+autores originales publicado en SIGMOD 2020-- describe en detalle cómo la
+base de datos logra consistencia serializable mediante el algoritmo de
+consenso Raft de Ongaro y Ousterhout~\cite{huang2020tidb}, sacrificando
+disponibilidad ante particiones de red severas. La verificación de
+tolerancia a fallos realizada en este trabajo (Sección~\ref{sec:cluster})
+reproduce, a pequeña escala y sobre datos propios, el comportamiento que
+estos trabajos predicen teóricamente.
+
+En la capa de procesamiento paralelo, el modelo de \emph{Resilient
+Distributed Datasets} (RDD) de Zaharia~\emph{et al.}~\cite{wang2022spark}
+fundamenta el diseño del pipeline PySpark implementado en este proyecto, y
+la guía de Chambers y Zaharia~\cite{wang2022spark} orienta las decisiones
+prácticas de la API de DataFrames utilizada. La revisión de Salloum
+\emph{et al.}~\cite{wang2022spark} sobre analítica de macrodatos con Apache
+Spark documenta patrones de uso comparables a los aplicados aquí (filtrado,
+combinación de conjuntos, ventanas de agregación y transformaciones de
+aprendizaje automático ligero). El marco metodológico para reportar la
+comparación de rendimiento se apoya en las guías de experimentación en
+ingeniería de software de Wohlin~\emph{et al.}~\cite{verdecchia2023} y en las
+recomendaciones de Jain~\cite{baltes2022sampling} para el diseño experimental de
+sistemas de cómputo, si bien --como se explica en la
+Sección~\ref{sec:protocolo}-- la ejecución completa de ese protocolo queda
+pendiente para un ciclo posterior.
+
+Cooper~\emph{et al.}~\cite{taipalus2023dbms} introducen el benchmark YCSB
+(\emph{Yahoo! Cloud Serving Benchmark}), un marco de referencia ampliamente
+adoptado para comparar sistemas de almacenamiento distribuido bajo cargas
+mixtas de lectura y escritura; aunque este proyecto no ejecuta YCSB
+directamente, su enfoque de variar sistemáticamente la carga y reportar
+percentiles de latencia inspira la estructura de la Tabla~\ref{tab:latencia}
+de este informe y es una referencia natural para extender el protocolo
+experimental de la Sección~\ref{sec:protocolo} en la siguiente entrega.
+Finalmente, la práctica de documentar decisiones arquitectónicas mediante
+registros ligeros (\emph{Architectural Decision Records}, ADR) --aplicada
+en los ADR-003 y ADR-004 de la Sección~\ref{sec:esquema}-- sigue la
+convención popularizada por Michael Nygard y adoptada de forma extendida en
+proyectos de arquitectura de microservicios como el descrito por
+Newman~\cite{li2021microservices}, cuya guía sobre sistemas de grano fino orientó
+también las decisiones de límites de servicio tomadas en las entregas
+previas del PFC.
+
+\section{Fundamento teórico}
+\label{sec:teoria}
+
+\subsection{Modelo de bases de datos distribuidas}
+
+Un sistema de base de datos distribuido (SBDD) se define como un conjunto
+de múltiples bases de datos lógicamente relacionadas, gestionadas por un
+único sistema y percibidas por el usuario como una única base~\cite{ozsu2020}.
+Sus objetivos de diseño son la transparencia de fragmentación, replicación
+y ubicación, la autonomía local de cada nodo, la disponibilidad y la
+escalabilidad horizontal.
+
+La \emph{fragmentación horizontal} de una relación $R$ produce fragmentos
+$R_1, R_2, \ldots, R_n$ mediante selección sobre un atributo particionador:
+\begin{equation}
+R_i = \sigma_{p_i}(R)
+\label{eq:fragmentacion}
+\end{equation}
+donde $\{p_i\}$ son predicados mutuamente excluyentes y colectivamente
+exhaustivos. La \emph{replicación} exige un factor $f \geq 3$ para tolerar
+la caída de un nodo conservando quórum mayoritario: un sistema con factor
+de replicación $f$ tolera la pérdida simultánea de hasta
+$\lfloor (f-1)/2 \rfloor$ réplicas por rango, siempre que se mantenga el
+quórum de escritura $\lceil f/2 \rceil + 1$~\cite{huang2020tidb,taft2020}. Con
+$f=3$, el quórum de escritura es $2$ y el sistema tolera la caída de
+$\lfloor 2/2 \rfloor = 1$ réplica, exactamente el comportamiento verificado
+empíricamente en la Sección~\ref{sec:cluster}.
+
+\subsubsection{Taxonomía de transparencia}
+
+Özsu y Valduriez~\cite{ozsu2020} descomponen la transparencia de un SBDD en
+cuatro niveles independientes, útiles para situar con precisión qué
+garantiza efectivamente la arquitectura de esta entrega. La
+\emph{transparencia de fragmentación} oculta al cliente que una relación
+está dividida en fragmentos; en SCLI, la aplicación consulta
+\texttt{solicitudes\_reserva} como una tabla única sin conocer, ni deber
+conocer, sus futuras particiones temporales. La \emph{transparencia de
+ubicación} oculta en qué nodo físico reside cada fragmento; CockroachDB la
+provee de forma nativa mediante su capa de distribución, que enruta cada
+consulta SQL al conjunto de rangos correspondiente sin intervención de la
+aplicación. La \emph{transparencia de replicación} oculta cuántas copias
+existen de cada dato y cómo se sincronizan; en este proyecto corresponde
+exactamente al mecanismo de Raft descrito en la
+Sección~\ref{sec:consenso}. Finalmente, la \emph{transparencia de
+concurrencia y de fallos} garantiza que transacciones simultáneas y fallos
+parciales de nodos no produzcan resultados incorrectos ni requieran lógica
+especial en la capa de aplicación; esta es, en sentido estricto, la
+propiedad que la Sección~\ref{sec:tolerancia} verifica empíricamente para
+el caso de la caída de un nodo.
+
+\subsection{Teorema CAP y modelo PACELC}
+
+El teorema CAP establece que un sistema distribuido no puede satisfacer
+simultáneamente consistencia, disponibilidad y tolerancia a particiones de
+red~\cite{lee2023cap}. El modelo PACELC extiende esta discusión
+incorporando el compromiso entre latencia y consistencia incluso en
+ausencia de particiones: en presencia de una partición ($P$), el sistema
+elige entre disponibilidad ($A$) y consistencia ($C$); en su ausencia
+($E$), elige entre latencia ($L$) y consistencia ($C$)~\cite{lee2023cap}.
+CockroachDB se ubica como un sistema \mbox{PC/EC}: prioriza consistencia
+serializable tanto ante particiones como en operación normal, sacrificando
+disponibilidad de escritura cuando el clúster pierde el quórum
+mayoritario~\cite{taft2020}. Este posicionamiento es exactamente el que se
+observó en el escenario de dos nodos caídos descrito en la
+Sección~\ref{sec:tolerancia}.
+
+\subsection{Consenso distribuido: Raft}
+\label{sec:consenso}
+
+El algoritmo Raft descompone el problema del consenso distribuido en tres
+subproblemas independientes: elección de líder, replicación del registro de
+operaciones (\emph{log}) y seguridad~\cite{huang2020tidb}. En CockroachDB, cada
+rango de datos --la unidad atómica de fragmentación y replicación del
+motor-- constituye un grupo Raft independiente con su propio líder. Una
+escritura se considera comprometida (\emph{committed}) cuando el líder
+recibe confirmación de una mayoría estricta de las réplicas del grupo,
+garantizando durabilidad frente a la caída de una minoría de nodos. Cuando
+el líder deja de estar disponible y sobreviven réplicas suficientes para
+alcanzar mayoría, el grupo elige un nuevo líder y continúa operando; en caso
+contrario, el rango deja de aceptar escrituras hasta que se restablezca el
+quórum~\cite{huang2020tidb}.
+
+\subsection{Modelo de programación paralela y leyes de escalamiento}
+
+El modelo RDD (\emph{Resilient Distributed Dataset}) de Apache Spark
+abstrae una colección distribuida e inmutable de datos, con linaje de
+transformaciones, evaluación perezosa (\emph{lazy evaluation}) y tolerancia
+a fallos mediante recómputo del linaje en lugar de replicación
+física~\cite{wang2022spark}. Sobre este modelo se construye la API de
+DataFrames utilizada en el pipeline de la Sección~\ref{sec:pipeline}.
+
+La Ley de Amdahl expresa el \emph{speedup} teórico máximo alcanzable al
+paralelizar un programa con una fracción $p$ paralelizable sobre $N$
+procesadores, dejando $(1-p)$ como fracción estrictamente secuencial:
+\begin{equation}
+S(N) = \frac{1}{(1-p) + \dfrac{p}{N}}
+\label{eq:amdahl}
+\end{equation}
+La ley predice un límite asintótico de $S(N) \to 1/(1-p)$ cuando
+$N \to \infty$, lo que implica que, para fracciones secuenciales incluso
+pequeñas, el beneficio marginal de añadir más núcleos decae
+rápidamente~\cite{poolla2023amdahl}. Gustafson replantea esta lectura observando
+que, en la práctica, el volumen de trabajo suele escalar junto con los
+recursos disponibles en lugar de permanecer fijo, lo que produce una
+estimación de \emph{speedup} escalado distinta y menos pesimista para
+cargas de trabajo que crecen con el tamaño del clúster~\cite{sun2023gustafson}.
