@@ -386,3 +386,114 @@ que, en la práctica, el volumen de trabajo suele escalar junto con los
 recursos disponibles en lugar de permanecer fijo, lo que produce una
 estimación de \emph{speedup} escalado distinta y menos pesimista para
 cargas de trabajo que crecen con el tamaño del clúster~\cite{sun2023gustafson}.
+Como se explica en la Sección~\ref{sec:protocolo}, este proyecto no cuenta
+todavía con mediciones ejecutadas de $N$ y $t(N)$ que permitan ajustar $p$
+empíricamente; la Ecuación~\eqref{eq:amdahl} se documenta aquí como el marco
+que se aplicará cuando el protocolo experimental se ejecute.
+
+Para ilustrar la lectura de la Ecuación~\eqref{eq:amdahl} con valores
+hipotéticos --no medidos-- considérese un pipeline con $p=0.8$ de fracción
+paralelizable, un valor plausible para una carga dominada por
+combinaciones (\emph{joins}) y agregaciones sobre particiones
+independientes. El límite asintótico sería
+$S(\infty) = 1/(1-0.8) = 5$, y ya con $N=8$ núcleos se alcanzaría
+$S(8) = 1/(0.2 + 0.8/8) = 3.33$, es decir, el $66.7\,\%$ del \emph{speedup}
+máximo teórico. La pregunta obligatoria de la defensa (Anexo B, ítem 3 de
+la guía de la entrega) --con cuántos núcleos se alcanza el 90\,\% del
+\emph{speedup} máximo-- se resuelve despejando $N$ de
+$S(N) = 0.9 \cdot S(\infty)$ en la Ecuación~\eqref{eq:amdahl}, lo que para
+$p=0.8$ arroja $N \approx 36$ núcleos; valores de $p$ más altos reducen
+drásticamente ese requisito. Este cálculo se reproducirá con el $p$
+efectivamente estimado a partir de las mediciones del protocolo
+(Sección~\ref{sec:protocolo}) una vez ejecutado.
+
+Formalmente, Gustafson define el \emph{speedup escalado} $S_g(N)$ asumiendo
+que el tiempo secuencial se mantiene fijo mientras el tamaño del problema
+crece proporcionalmente a $N$:
+\begin{equation}
+S_g(N) = N - \alpha \cdot (N-1)
+\label{eq:gustafson}
+\end{equation}
+donde $\alpha$ es la fracción de tiempo que permanece secuencial en la
+ejecución paralela (no en la secuencial, a diferencia de $p$ en Amdahl). La
+diferencia conceptual entre ambas leyes es relevante para este proyecto
+porque el pipeline de reservas procesa un volumen de datos que, en
+producción, crecería con el uso real del sistema y no permanecería fijo;
+la Sección~\ref{sec:discusion} retoma esta distinción al interpretar qué
+ley es la lectura más apropiada para el dominio de SCLI.
+
+\section{Diseño del esquema distribuido}
+\label{sec:esquema}
+
+El microservicio \texttt{reservas-solicitudes-service} es propietario de
+cuatro tablas del dominio de reservas: \texttt{solicitudes\_reserva},
+\texttt{reservas}, \texttt{historial\_solicitudes} y
+\texttt{bloqueos\_agenda}, más una quinta tabla de configuración
+(\texttt{configuraciones\_reserva}) que fija parámetros globales de
+anticipación mínima y máxima, duración permitida y política de fines de
+semana. El esquema vigente, heredado de la entrega anterior, se crea
+mediante migraciones Flyway y conserva claves primarias \texttt{UUID}
+simples; los identificadores de usuarios, docentes, laboratorios, materias
+y periodos lectivos son referencias externas por UUID, sin claves foráneas
+entre los cuatro microservicios del sistema, preservando así el patrón de
+base de datos por microservicio establecido en E2.
+
+\subsection{Modelo de datos y patrón de acceso}
+\label{sec:modelodatos}
+
+Las relaciones persistentes dentro del límite del microservicio son: una
+solicitud puede producir una reserva y cada reserva pertenece a una única
+solicitud (relación 1:1 diferida en el tiempo, ya que una solicitud puede
+existir sin haber sido aprobada todavía); una solicitud tiene múltiples
+eventos de historial (relación 1:N con \texttt{historial\_solicitudes}); y
+un bloqueo de agenda no tiene clave foránea hacia las otras tablas, pero
+participa en las mismas consultas operativas mediante laboratorio, fecha y
+franja horaria. El Listado~\ref{lst:schema} reproduce el fragmento
+central del esquema ejecutable aplicado en el clúster, correspondiente a la
+tabla \texttt{solicitudes\_reserva}.
+
+\begin{lstlisting}[language=sql,caption={Fragmento de \texttt{db/schema.sql}: definición de \texttt{solicitudes\_reserva}.},label={lst:schema}]
+CREATE TABLE solicitudes_reserva (
+  id UUID DEFAULT gen_random_uuid(),
+  solicitante_id UUID NOT NULL,
+  docente_id UUID NOT NULL,
+  laboratorio_id UUID NOT NULL,
+  materia_id UUID NOT NULL,
+  periodo_lectivo_id UUID NOT NULL,
+  fecha_reserva DATE NOT NULL,
+  hora_inicio TIME NOT NULL,
+  hora_fin TIME NOT NULL,
+  numero_participantes INTEGER NOT NULL,
+  estado VARCHAR(30) NOT NULL
+    DEFAULT 'PENDIENTE',
+  creada_en TIMESTAMPTZ NOT NULL
+    DEFAULT CURRENT_TIMESTAMP,
+  version BIGINT NOT NULL DEFAULT 0,
+  CONSTRAINT pk_solicitudes_reserva
+    PRIMARY KEY (id),
+  CONSTRAINT ck_solicitudes_reserva_horas
+    CHECK (hora_fin > hora_inicio),
+  CONSTRAINT ck_solicitudes_reserva_estado
+    CHECK (estado IN ('PENDIENTE',
+      'EN_REVISION','APROBADA',
+      'RECHAZADA','CANCELADA','EXPIRADA'))
+);
+\end{lstlisting}
+
+Nótese la columna \texttt{version}, empleada para control de concurrencia
+optimista a nivel de aplicación, y la restricción \texttt{CHECK} sobre el
+estado, que documenta en el propio esquema el ciclo de vida de una
+solicitud sin depender exclusivamente de la capa de aplicación para
+mantener la integridad de ese invariante. Las consultas de disponibilidad,
+calendario y detección de conflictos acotan los datos por
+\texttt{laboratorio\_id} y por rangos temporales; el historial se consulta
+por \texttt{solicitud\_id} y se ordena por \texttt{fecha\_hora}. Este
+patrón de acceso es el que motiva directamente la estrategia de
+fragmentación descrita a continuación.
+
+\subsection{Estrategia de fragmentación (ADR-003)}
+
+
+Las consultas operativas dominantes del dominio --disponibilidad de
+laboratorios, calendario y detección de conflictos-- acotan los datos por
+\texttt{laboratorio\_id} y por rangos de fecha. Se evaluaron cinco
