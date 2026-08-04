@@ -1,0 +1,244 @@
+/**
+ * Estilos base compartidos del módulo académico.
+ * Se importa una sola vez (en main.ts) para que clases como .acad-btn
+ * o .acad-badge estén disponibles en cualquier componente sin repetir
+ * CSS en cada .vue.
+ */
+
+/* ---------------------------------------------------------------------- */
+/* Botones                                                                 */
+/* ---------------------------------------------------------------------- */
+
+.acad-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--acad-space-2);
+  font-family: var(--acad-font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 10px var(--acad-space-4);
+  border-radius: var(--acad-radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background-color var(--acad-transition-fast),
+    border-color var(--acad-transition-fast),
+    color var(--acad-transition-fast),
+    opacity var(--acad-transition-fast);
+}
+
+.acad-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.acad-btn:focus-visible {
+  outline: 2px solid var(--acad-primary);
+  outline-offset: 2px;
+}
+
+.acad-btn--primary {
+  background: var(--acad-primary);
+  color: var(--acad-text-on-accent);
+}
+
+.acad-btn--primary:not(:disabled):hover {
+  background: var(--acad-primary-hover);
+}
+
+.acad-btn--ghost {
+  background: transparent;
+  border-color: var(--acad-border-strong);
+  color: var(--acad-text-primary);
+}
+
+.acad-btn--ghost:not(:disabled):hover {
+  background: var(--acad-surface-sunken);
+}
+
+.acad-btn--danger {
+  background: var(--acad-danger);
+  color: var(--acad-text-on-accent);
+}
+
+.acad-btn--danger:not(:disabled):hover {
+  filter: brightness(0.92);
+}
+
+.acad-btn--success {
+  background: var(--acad-success);
+  color: var(--acad-text-on-accent);
+}
+
+.acad-btn--success:not(:disabled):hover {
+  filter: brightness(0.92);
+}
+
+.acad-btn--warning {
+  background: var(--acad-warning);
+  color: var(--acad-text-on-accent);
+}
+
+.acad-btn--info {
+  background: var(--acad-info);
+  color: var(--acad-text-on-accent);
+}
+
+.acad-btn--neutral {
+  background: var(--acad-neutral);
+  color: var(--acad-text-on-accent);
+}
+
+.acad-btn--icon {
+  padding: var(--acad-space-2);
+  border-radius: var(--acad-radius-sm);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Badges de estado                                                       */
+/* ---------------------------------------------------------------------- */
+
+.acad-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--acad-font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.acad-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.acad-badge--success {
+  background: var(--acad-success-soft);
+  color: var(--acad-success);
+}
+
+.acad-badge--warning {
+  background: var(--acad-warning-soft);
+  color: var(--acad-warning);
+}
+
+.acad-badge--danger {
+  background: var(--acad-danger-soft);
+  color: var(--acad-danger);
+}
+
+.acad-badge--info {
+  background: var(--acad-info-soft);
+  color: var(--acad-info);
+}
+
+.acad-badge--neutral {
+  background: var(--acad-neutral-soft);
+  color: var(--acad-text-secondary);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Campos de formulario                                                   */
+/* ---------------------------------------------------------------------- */
+
+.acad-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--acad-space-4);
+}
+
+.acad-campo__etiqueta {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--acad-text-primary);
+}
+
+.acad-campo__ayuda {
+  font-size: 0.75rem;
+  color: var(--acad-text-muted);
+}
+
+.acad-campo__error {
+  font-size: 0.75rem;
+  color: var(--acad-danger);
+}
+
+.acad-input,
+.acad-select,
+.acad-textarea {
+  font-family: var(--acad-font-sans);
+  font-size: 0.875rem;
+  color: var(--acad-text-primary);
+  background: var(--acad-surface);
+  border: 1px solid var(--acad-border-strong);
+  border-radius: var(--acad-radius-sm);
+  padding: 9px var(--acad-space-3);
+  transition:
+    border-color var(--acad-transition-fast),
+    box-shadow var(--acad-transition-fast);
+  width: 100%;
+}
+
+.acad-textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+}
+
+.acad-input:focus,
+.acad-select:focus,
+.acad-textarea:focus {
+  outline: none;
+  border-color: var(--acad-primary);
+  box-shadow: 0 0 0 3px var(--acad-primary-soft);
+}
+
+.acad-input--error,
+.acad-select--error,
+.acad-textarea--error {
+  border-color: var(--acad-danger);
+}
+
+/* Campos de código/inventario: familia monoespaciada, refuerza la
+   identidad de "sistema de control" del módulo. */
+.acad-input--codigo {
+  font-family: var(--acad-font-mono);
+  letter-spacing: 0.02em;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Utilidades                                                             */
+/* ---------------------------------------------------------------------- */
+
+.acad-codigo {
+  font-family: var(--acad-font-mono);
+  font-size: 0.8125rem;
+  color: var(--acad-text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.acad-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--acad-space-2);
+  padding: var(--acad-space-8) var(--acad-space-4);
+  color: var(--acad-text-secondary);
+  text-align: center;
+}
+
+.acad-vacio__titulo {
+  font-weight: 600;
+  color: var(--acad-text-primary);
+}
